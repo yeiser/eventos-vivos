@@ -177,8 +177,8 @@ static void ConfigurarSwagger(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOption
         Description = "Pega el JWT obtenido en POST /api/v1/auth/login (sin el prefijo 'Bearer ').",
     });
 
-    // El candado se aplica POR operación (solo a las protegidas), no de forma global.
-    options.OperationFilter<SecurityRequirementsOperationFilter>();
+    // El candado se aplica solo a las operaciones protegidas (no global ni en el login).
+    options.DocumentFilter<SecurityRequirementsOperationFilter>();
 
     // Incluye los comentarios XML (summary/remarks/response) en la documentación.
     var xml = Path.Combine(AppContext.BaseDirectory, "EventosVivos.Api.xml");
