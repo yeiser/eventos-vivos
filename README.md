@@ -47,39 +47,93 @@ automatización de la validación de reservas y pagos.
 └────────────────────────────────────────────────────────────────┘
 ```
 
-La **regla de dependencia** apunta hacia adentro: el `Domain` no referencia a nadie; `Application`
-define puertos (interfaces) que `Infrastructure` implementa; `Api` compone todo por DI.
+La **regla de dependencia** apunta siempre hacia adentro: el `Domain` no referencia a nada (ni EF, ni
+ASP.NET); `Application` define **puertos** (interfaces: `IEventoRepository`, `IClock`,
+`IPasswordHasher`…) que `Infrastructure` implementa; `Api` solo orquesta y compone por inyección de
+dependencias. Consecuencia práctica: las reglas de negocio se prueban **sin** base de datos ni servidor
+web, y la infraestructura (PostgreSQL, JWT, EF) queda como un detalle reemplazable.
 
-### Decisiones de diseño (y por qué)
+**¿Por qué Clean Architecture y no un CRUD por capas?** El núcleo del problema no es *persistir datos*,
+son las **reglas** (anti-sobreventa, solapamiento de agendas, ventanas horarias, penalizaciones) y su
+**concurrencia**. Aislar esas reglas en un dominio puro las hace explícitas, testeables y a prueba de
+cambios de framework. El costo —más proyectos y algo de ceremonia— se justifica porque la lógica supera
+con creces al CRUD; para un CRUD trivial habría sido sobre-ingeniería.
 
-- **Modelo de dominio rico**: las reglas de negocio (RN01–RN07) viven en las entidades (`Evento`,
-  `Reserva`) y se prueban sin infraestructura. Evita el *anemic domain model*.
-- **Anti-sobreventa real** (problema #1 del cliente): el flujo de reserva corre dentro de una
-  **transacción con bloqueo pesimista** (`SELECT … FOR UPDATE` sobre el evento), de modo que las
-  reservas concurrentes se serializan y el aforo nunca se excede. Reforzado con `xmin` (token de
-  concurrencia optimista de PostgreSQL). Hay una **prueba de concurrencia** que lanza N reservas en
-  paralelo sobre un aforo pequeño y verifica `Σ ocupadas ≤ capacidad`.
-- **Tiempo inyectable** (`IClock`): todas las reglas sensibles a la hora (RN03/RN04/RN06/RN07, ventana
-  de 24h) son deterministas y testeables.
-- **CQRS ligero** en `Application` (comandos/queries como handlers, sin MediatR) — explícito y testeable.
-- **Errores RFC 7807** (`application/problem+json`) uniformes, con código de regla (`RN0x`) y `traceId`.
-  Distinción intencional: **400** (entrada), **401/403** (auth), **409/422** (estado/regla de negocio).
-- **Auditoría como *cross-cutting concern***: dos interceptores de EF Core llenan la **trazabilidad**
-  (creado/modificado por quién y cuándo) y un **audit trail inmutable** (valores antes/después, con
-  *masking* de datos sensibles), sin contaminar la lógica de dominio.
-- **PostgreSQL**: `ILIKE` nativo para la búsqueda de título (RF-02) y `xmin` para concurrencia.
-- **Frontend Angular última versión + tema Metronic**: se integra el **CSS** de Metronic y se replica
-  el *layout shell* en componentes standalone (no se usa el JS de Metronic para evitar conflictos con
-  las librerías de Angular). El frontend usa signals + interceptores (JWT y errores) + guards por rol.
+### Decisiones de diseño (problema → decisión → por qué)
 
-### Seguridad
+**Anti-sobreventa (RN01) — el riesgo nº 1 del negocio.** Dos reservas simultáneas no deben superar el
+aforo. *Decisión:* el caso de uso abre una **transacción** y toma un **bloqueo pesimista**
+(`SELECT … FOR UPDATE` sobre la fila del evento) antes de contar el cupo y escribir, de modo que las
+reservas concurrentes sobre el mismo evento se **serializan**; como segunda barrera, el `Evento` lleva
+el token de concurrencia **`xmin`** de PostgreSQL. *Por qué pesimista y no solo optimista:* con
+optimista puro, bajo contención todas las transacciones leen el mismo cupo, una gana y el resto debe
+reintentar (tormenta de reintentos); el bloqueo evita ese trabajo desperdiciado en el punto más caliente.
+*Por qué no un lock en memoria de la app:* no sobrevive a múltiples instancias — la verdad de
+concurrencia debe vivir en la base de datos. Hay una **prueba de integración** que lanza N reservas en
+paralelo (Postgres real vía Testcontainers) y verifica `Σ ocupadas ≤ capacidad`.
 
-- **JWT Bearer + roles** (Admin/Usuario) con política de *fallback* (todo requiere autenticación salvo
-  `login`). Admin: crear evento, confirmar pago, reporte, auditoría, gestión de reservas.
-- **Remediación de fuerza bruta en dos capas**: (1) *rate limiting* por IP en `login` y (2) **bloqueo
-  de cuenta** tras 5 intentos fallidos durante 15 min (→ HTTP 423). El lockout está modelado en el dominio.
-- **Hash de contraseñas** PBKDF2 con comparación en tiempo constante; **validación/whitelisting** de
-  entrada (DTOs explícitos); **CORS** restringido; **sin secretos** en el repositorio.
+**Modelo de dominio rico, no anémico.** Las invariantes (RN01–RN07) viven dentro de `Evento`/`Reserva`
+como métodos que solo permiten transiciones válidas, no en *services* que manipulan propiedades públicas.
+*Por qué:* evita que una regla se duplique o se salte según quién llame; el objeto siempre está en un
+estado válido.
+
+**Value Objects (`Email`, `CodigoReserva`).** Encapsulan validación y formato (un `Email` inválido no
+puede existir; el código es de 6 dígitos) y se persisten con *value converters* de EF. *Por qué:* hace
+**imposible representar estados ilegales** y centraliza el formato en un solo lugar.
+
+**CQRS ligero, sin MediatR.** Cada caso de uso es un *handler* explícito (comando/consulta) inyectado por
+DI; las consultas proyectan a DTOs sin pasar por el dominio. *Por qué sin MediatR:* para este tamaño
+añade una dependencia y una indirección por reflexión que no aporta — los handlers explícitos se leen y
+depuran mejor.
+
+**Tiempo inyectable (`IClock`).** Las reglas dependientes de la hora (RN03 noche/fin de semana, RN04
+< 1 h, RN06 auto-completado, RN07 ventana de cancelación) toman el "ahora" de un `IClock`. *Por qué:* las
+vuelve **deterministas** — en pruebas se inyecta un reloj fijo y se cubren los bordes sin esperas ni
+*flakiness*.
+
+**Errores como contrato (RFC 7807 / ProblemDetails).** Toda respuesta de error es
+`application/problem+json` con código de regla (`RN0x`), `title`, `status` y `traceId`. Distinción
+intencional: **400** (entrada mal formada, la valida FluentValidation), **401/403** (auth), **409/422**
+(estado o regla de negocio violada). *Por qué:* un contrato de error uniforme y legible por máquina deja
+que el frontend reaccione por **código**, no parseando textos.
+
+**Auditoría como *cross-cutting concern* (dos interceptores de EF Core).** Uno rellena la **trazabilidad**
+de cada entidad (creado/modificado por quién y cuándo); otro escribe un **registro inmutable** (valores
+antes/después, con *masking* de datos sensibles). *Por qué interceptores y no código en cada handler:* la
+auditoría no debe contaminar la lógica ni poder "olvidarse" — al colgarse de `SaveChanges` se aplica de
+forma transversal y consistente.
+
+### Por qué cada tecnología
+
+| Elección | Por qué (preciso) | Alternativa descartada |
+|---|---|---|
+| **.NET 10 / ASP.NET Core** | LTS, alto rendimiento, DI y *hosting* nativos; es la plataforma del puesto | — |
+| **PostgreSQL + Npgsql** | `SELECT … FOR UPDATE` y `xmin` para la concurrencia; `ILIKE` nativo para la búsqueda por título (RF-02); open-source | SQL Server (no se necesitan features exclusivas ni licencia) |
+| **EF Core 10** | Migraciones versionadas, *value converters* para los VO e **interceptores** para la auditoría | Dapper (más control SQL, pero perderíamos migraciones/VO/interceptores) |
+| **EFCore.NamingConventions** | Columnas `snake_case` idiomáticas en Postgres sin anotar cada propiedad | Mapear a mano (ruidoso y propenso a error) |
+| **FluentValidation** | Separa la validación de **entrada** (forma del DTO) de las **invariantes de dominio**; reglas declarativas | *Data annotations* (menos expresivas para reglas compuestas) |
+| **JWT Bearer + roles** | Autenticación **sin estado** → escala horizontal sin sesión compartida; encaja con SPA + API | Cookies de sesión (requieren almacén de sesión y afinidad) |
+| **PBKDF2 (SHA-256, 100k iter.)** | Derivación de clave robusta **incluida en la BCL**, sin dependencias; comparación en tiempo constante | bcrypt/Argon2 (más fuertes, pero añaden paquete; PBKDF2 cumple aquí) |
+| **Serilog** | Logging **estructurado** (consultable) y enriquecido por petición | `ILogger` plano (menos estructura) |
+| **Angular 22 (zoneless + signals + standalone)** | "Última versión" pedida; *signals* dan reactividad fina y *zoneless* elimina el costo de Zone.js; *standalone* quita NgModules | Angular con Zone.js/NgModules (más sobrecarga y *boilerplate*) |
+| **Tema Metronic (solo CSS)** | Requisito de *look & feel*; se usa su CSS y se reescribe el *shell* en componentes propios | Cargar su JS (choca con ApexCharts/jQuery de Angular) |
+| **Nginx (reverse proxy)** | Sirve la SPA y *proxya* `/api` → **mismo origen, sin CORS**; imagen pequeña | Servir API y front por separado (obliga a gestionar CORS) |
+| **Vitest** | Runner por defecto del nuevo *builder* de Angular; arranque rápido (esbuild) | Karma/Jasmine (en retirada, más lentos) |
+| **Testcontainers (Postgres real)** | Las pruebas de concurrencia y SQL (`FOR UPDATE`, `ILIKE`) corren contra **Postgres de verdad**, no un *in-memory* que mentiría | EF InMemory/SQLite (no reproducen el bloqueo ni el dialecto) |
+| **Docker multi-stage + Compose** | Imágenes reproducibles y pequeñas (runtime sin SDK); un comando levanta todo | — |
+| **Terraform + Azure ACI** | IaC idempotente con la **mínima** huella para un ambiente de solo demostración | VM/AKS/PaaS completo (sobredimensionado para una demo) |
+| **SonarQube Cloud** | *Quality gate* + cobertura en cada push; gratis en repos públicos | Servidor self-hosted (más que mantener para esto) |
+
+### Seguridad (defensa en capas)
+
+- **JWT Bearer + roles** (Admin/Usuario) con política de *fallback*: **todo** requiere autenticación
+  salvo `login`. Admin: crear evento, confirmar pago, reporte, auditoría y gestión de reservas.
+- **Remediación de fuerza bruta en dos capas:** (1) *rate limiting* por IP sobre `login` y (2) **bloqueo
+  de cuenta** tras 5 intentos fallidos durante 15 min (→ HTTP **423**). El lockout se modela en el dominio
+  (no es un detalle de infraestructura), así que es testeable y consistente.
+- **Superficie de entrada controlada:** DTOs explícitos (*whitelisting*, sin *over-posting*), CORS
+  restringido y **sin secretos en el repositorio** (los genera Terraform o se inyectan por variable de
+  entorno). La clave JWT y la cadena de conexión de `appsettings.json` son *placeholders* de desarrollo.
 
 ---
 
