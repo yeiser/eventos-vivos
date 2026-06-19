@@ -18,7 +18,7 @@ namespace EventosVivos.Api.Swagger;
 /// </remarks>
 public sealed partial class SecurityRequirementsOperationFilter : IDocumentFilter
 {
-    public void Apply(OpenApiDocument document, DocumentFilterContext context)
+    public void Apply(OpenApiDocument swaggerDoc, DocumentFilterContext context)
     {
         foreach (var api in context.ApiDescriptions)
         {
@@ -36,9 +36,11 @@ public sealed partial class SecurityRequirementsOperationFilter : IDocumentFilte
                 .Distinct()
                 .ToList();
 
-            // Ruta del documento (sin las restricciones de ruta, p. ej. {id:guid} -> {id}).
-            var path = "/" + RestriccionRuta().Replace(api.RelativePath ?? string.Empty, "{$1}");
-            if (!document.Paths.TryGetValue(path, out var item) || item.Operations is null)
+            // Ruta sin las restricciones de ruta (p. ej. {id:guid} -> {id}); se compara sin '/' inicial.
+            var ruta = RestriccionRuta().Replace(api.RelativePath ?? string.Empty, "{$1}").Trim('/');
+            var item = swaggerDoc.Paths
+                .FirstOrDefault(p => p.Key.Trim('/').Equals(ruta, StringComparison.OrdinalIgnoreCase)).Value;
+            if (item?.Operations is null)
                 continue;
 
             foreach (var entry in item.Operations)
@@ -46,12 +48,12 @@ public sealed partial class SecurityRequirementsOperationFilter : IDocumentFilte
                 if (!string.Equals(entry.Key.ToString(), api.HttpMethod, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                AplicarSeguridad(entry.Value, document, roles);
+                AplicarSeguridad(entry.Value, swaggerDoc, roles);
             }
         }
     }
 
-    private static void AplicarSeguridad(OpenApiOperation operation, OpenApiDocument document, List<string> roles)
+    private static void AplicarSeguridad(OpenApiOperation operation, OpenApiDocument swaggerDoc, List<string> roles)
     {
         operation.Responses ??= new OpenApiResponses();
         operation.Responses["401"] = new OpenApiResponse { Description = "No autenticado: falta el token o no es válido." };
@@ -67,7 +69,7 @@ public sealed partial class SecurityRequirementsOperationFilter : IDocumentFilte
         [
             new OpenApiSecurityRequirement
             {
-                [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>(),
+                [new OpenApiSecuritySchemeReference("Bearer", swaggerDoc)] = new List<string>(),
             },
         ];
     }
