@@ -17,6 +17,9 @@ TestResults/
 *.coverage
 *.coveragexml
 coverage/
+coverage-backend/
+coverage-test/
+.sonarqube/
 *.received.*
 
 # ---------------------------------------------------------------------------

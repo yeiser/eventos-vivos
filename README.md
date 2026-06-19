@@ -21,6 +21,7 @@ automatización de la validación de reservas y pagos.
 | Pruebas | xUnit, FluentAssertions, NSubstitute, **Testcontainers** (backend) · **Vitest** (frontend) |
 | Empaquetado | **Docker** (multi-stage) + **Docker Compose** · **Nginx** (sirve la SPA y hace de proxy de la API) |
 | CI/CD | **GitHub Actions** (build + test de backend y frontend, smoke de imágenes) |
+| Calidad | **SonarQube Cloud** (análisis estático + cobertura: OpenCover / lcov) |
 | Infra | **Terraform** · **Azure Container Instances** (ambiente de demostración mínimo) |
 
 ---
@@ -261,6 +262,40 @@ Errores en formato `application/problem+json` (RFC 7807) con código de regla y 
   frontend compila con Node y se sirve con **Nginx** (estáticos + proxy `/api`).
 - El stack completo se valida de extremo a extremo con `docker compose up --build`
   (login, listado de eventos y SPA verificados a través del proxy de Nginx).
+
+---
+
+## Calidad de código (SonarCloud)
+
+El análisis estático y la cobertura se publican en **SonarQube Cloud** desde GitHub Actions
+([`.github/workflows/sonarcloud.yml`](.github/workflows/sonarcloud.yml)) en cada *push*/PR:
+
+- **Backend** — SonarScanner para .NET; cobertura **OpenCover** vía coverlet
+  ([`backend/coverlet.runsettings`](backend/coverlet.runsettings)).
+- **Frontend** — cobertura **lcov** con Vitest (`@vitest/coverage-v8`).
+- Quality Gate sobre el *new code*; el job se **omite** hasta que configures la organización.
+
+### Puesta en marcha (una sola vez)
+
+1. Entra en [sonarcloud.io](https://sonarcloud.io) con tu cuenta de **GitHub** y crea/usa una
+   **organización** ligada a tu cuenta; importa el repositorio `eventos-vivos`.
+2. En el proyecto: **Administration → Analysis Method → desactiva "Automatic Analysis"**
+   (usamos el análisis basado en CI; si no, chocan).
+3. Genera un **token** (My Account → Security) y añádelo en el repo de GitHub como
+   *secret* **`SONAR_TOKEN`** (Settings → Secrets and variables → Actions → *Secrets*).
+4. Añade dos *variables* (misma pantalla → *Variables*):
+   **`SONAR_ORGANIZATION`** (la *organization key*) y **`SONAR_PROJECT_KEY`** (la *project key*).
+5. Haz *push* a `main`: el workflow corre el análisis y publica el dashboard.
+
+### Cobertura en local (sin servidor)
+
+```bash
+# Backend (OpenCover)
+cd backend && dotnet test --settings coverlet.runsettings \
+  --collect:"XPlat Code Coverage" --results-directory coverage-backend
+# Frontend (lcov)
+cd frontend/eventos-vivos-web && npx ng test --watch=false --coverage --coverage-reporters=lcovonly
+```
 
 ---
 
