@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 using EventosVivos.Api.Errores;
 using EventosVivos.Api.Identity;
+using EventosVivos.Api.Swagger;
 using EventosVivos.Application;
 using EventosVivos.Application.Abstractions;
 using EventosVivos.Infrastructure;
@@ -108,7 +109,13 @@ app.UseSerilogRequestLogging();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(ui =>
+    {
+        ui.DocumentTitle = "EventosVivos API";
+        ui.DisplayRequestDuration();          // muestra la duración de cada petición
+        ui.EnablePersistAuthorization();      // conserva el token al refrescar la página
+        ui.DefaultModelsExpandDepth(0);       // colapsa la sección de esquemas
+    });
 }
 
 // Migración + seed al arrancar. Automático en Development; en contenedores/producción se
@@ -142,8 +149,24 @@ static Func<HttpContext, RateLimitPartition<string>> PorIp(int permisos, int ven
 
 static void ConfigurarSwagger(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions options)
 {
-    options.SwaggerDoc("v1", new OpenApiInfo { Title = "EventosVivos API", Version = "v1" });
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "EventosVivos API",
+        Version = "v1",
+        Description = """
+            API REST del núcleo de reservas de eventos: control de aforo **sin sobreventa**,
+            prevención de conflictos de agenda por venue y automatización de la validación de pagos.
 
+            **Autenticación** — obtén un JWT en `POST /api/v1/auth/login` y púlsalo en **Authorize** 🔒.
+            Credenciales de demo: `admin` / `Admin123!` (Admin) · `usuario` / `Usuario123!` (Usuario).
+            Los endpoints con candado requieren token; los de rol **Admin** lo indican en su descripción.
+
+            **Errores** — formato `application/problem+json` (RFC 7807) con código de regla y `traceId`.
+            """,
+        Contact = new OpenApiContact { Name = "EventosVivos" },
+    });
+
+    // Esquema Bearer: en el diálogo «Authorize» basta con pegar el token (sin escribir "Bearer ").
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -151,12 +174,19 @@ static void ConfigurarSwagger(Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOption
         Scheme = "bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Introduce el JWT obtenido en /api/v1/auth/login."
+        Description = "Pega el JWT obtenido en POST /api/v1/auth/login (sin el prefijo 'Bearer ').",
     });
-    options.AddSecurityRequirement(_ => new OpenApiSecurityRequirement
-    {
-        [new OpenApiSecuritySchemeReference("Bearer", null)] = new List<string>()
-    });
+
+    // El candado se aplica POR operación (solo a las protegidas), no de forma global.
+    options.OperationFilter<SecurityRequirementsOperationFilter>();
+
+    // Incluye los comentarios XML (summary/remarks/response) en la documentación.
+    var xml = Path.Combine(AppContext.BaseDirectory, "EventosVivos.Api.xml");
+    if (File.Exists(xml))
+        options.IncludeXmlComments(xml, includeControllerXmlComments: true);
+
+    options.SupportNonNullableReferenceTypes();
+    options.DescribeAllParametersInCamelCase();
 }
 
 // Punto de entrada visible para las pruebas de integración (WebApplicationFactory).

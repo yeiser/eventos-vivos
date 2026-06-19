@@ -12,7 +12,9 @@ public sealed class VenuesController : ControllerBase
 
     public VenuesController(ListarVenuesHandler listar) => _listar = listar;
 
-    /// <summary>Lista los venues de referencia.</summary>
+    /// <summary>Lista los venues (recintos) de referencia.</summary>
+    /// <remarks>Datos maestros para crear eventos y mostrar el nombre del recinto en la UI.</remarks>
+    /// <response code="200">Listado de venues con su capacidad.</response>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<VenueDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<VenueDto>>> Listar(CancellationToken cancellationToken) =>

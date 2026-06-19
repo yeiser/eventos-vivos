@@ -3,6 +3,10 @@
   <PropertyGroup>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Genera el XML de comentarios para que Swagger muestre la documentación de cada endpoint. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- No exigir comentario XML en cada miembro público (DTOs, etc.). -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

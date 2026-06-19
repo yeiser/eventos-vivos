@@ -12,11 +12,14 @@ namespace EventosVivos.Api.Controllers;
 [Authorize(Roles = "Admin")]
 public sealed class AuditoriaController : ControllerBase
 {
-    /// <summary>§16.4: historial de cambios (audit trail) con filtros. Solo administradores. Solo lectura.</summary>
+    /// <summary>Historial de cambios (audit trail) con filtros — solo lectura.</summary>
+    /// <remarks>
+    /// Registro **inmutable** de auditoría: quién hizo qué y cuándo, con los valores antes/después y
+    /// *masking* de datos sensibles. Filtros por entidad, id, usuario, acción y rango de fechas.
+    /// </remarks>
+    /// <response code="200">Página del historial de auditoría.</response>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<AuditLogDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<PagedResult<AuditLogDto>>> Listar(
         [FromQuery] AuditoriaFiltro filtro,
         [FromServices] ListarAuditoriaHandler handler,

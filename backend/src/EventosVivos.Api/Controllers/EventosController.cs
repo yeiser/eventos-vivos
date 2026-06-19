@@ -17,7 +17,14 @@ namespace EventosVivos.Api.Controllers;
 [Route("api/v1/eventos")]
 public sealed class EventosController : ControllerBase
 {
-    /// <summary>RF-01: crea un evento (solo administradores).</summary>
+    /// <summary>Crea un evento (RF-01).</summary>
+    /// <remarks>
+    /// Valida las reglas de creación: capacidad ≤ aforo del venue (RN01), sin solapamiento de horario en
+    /// el mismo venue (RN02) y dentro del horario permitido (RN03 — noche / fin de semana).
+    /// </remarks>
+    /// <response code="201">Evento creado; la cabecera `Location` apunta a su detalle.</response>
+    /// <response code="400">Datos de entrada inválidos.</response>
+    /// <response code="422">Violación de una regla de negocio (solapamiento, capacidad, horario).</response>
     [HttpPost]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(EventoDto), StatusCodes.Status201Created)]
@@ -32,7 +39,11 @@ public sealed class EventosController : ControllerBase
         return CreatedAtAction(nameof(Obtener), new { id = evento.Id }, evento);
     }
 
-    /// <summary>RF-02: lista eventos con filtros y paginación.</summary>
+    /// <summary>Lista eventos con filtros y paginación (RF-02).</summary>
+    /// <remarks>
+    /// Filtros opcionales: título (búsqueda parcial vía `ILIKE`), tipo, estado, venue y rango de fechas.
+    /// </remarks>
+    /// <response code="200">Página de eventos con el total para paginar.</response>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<EventoResumenDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResult<EventoResumenDto>>> Listar(
@@ -41,7 +52,9 @@ public sealed class EventosController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await handler.EjecutarAsync(filtro, cancellationToken));
 
-    /// <summary>Detalle de un evento.</summary>
+    /// <summary>Obtiene el detalle de un evento por su id.</summary>
+    /// <response code="200">Evento encontrado (incluye aforo y entradas disponibles).</response>
+    /// <response code="404">No existe un evento con ese id.</response>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(EventoDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -51,7 +64,10 @@ public sealed class EventosController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await handler.EjecutarAsync(id, cancellationToken));
 
-    /// <summary>RF-06: reporte de ocupación de un evento (solo administradores).</summary>
+    /// <summary>Reporte de ocupación de un evento (RF-06).</summary>
+    /// <remarks>Para el porcentaje de ocupación cuenta únicamente las reservas **confirmadas**.</remarks>
+    /// <response code="200">Reporte con capacidad, vendidas, disponibles y % de ocupación.</response>
+    /// <response code="404">No existe un evento con ese id.</response>
     [HttpGet("{id:guid}/reporte")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(ReporteOcupacionDto), StatusCodes.Status200OK)]
@@ -62,7 +78,9 @@ public sealed class EventosController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await handler.EjecutarAsync(id, cancellationToken));
 
-    /// <summary>Lista las reservas de un evento (vista de organizador, solo administradores).</summary>
+    /// <summary>Lista las reservas de un evento (vista de organizador).</summary>
+    /// <response code="200">Reservas del evento, con su estado y código.</response>
+    /// <response code="404">No existe un evento con ese id.</response>
     [HttpGet("{id:guid}/reservas")]
     [Authorize(Roles = "Admin")]
     [ProducesResponseType(typeof(IReadOnlyList<ReservaDto>), StatusCodes.Status200OK)]
@@ -73,7 +91,16 @@ public sealed class EventosController : ControllerBase
         CancellationToken cancellationToken) =>
         Ok(await handler.EjecutarAsync(id, cancellationToken));
 
-    /// <summary>RF-03: reserva entradas de un evento.</summary>
+    /// <summary>Reserva entradas de un evento (RF-03).</summary>
+    /// <remarks>
+    /// Protegida contra **sobreventa**: corre en una transacción con bloqueo del evento. El límite de
+    /// entradas por transacción combina RN04 (&lt; 1 h: no se permite), RF-03 (&lt; 24 h: máx. 5) y
+    /// RN05 (precio &gt; 100: máx. 10), tomando el más restrictivo. Aplica *rate limiting* por IP.
+    /// </remarks>
+    /// <response code="201">Reserva creada en estado pendiente de pago; `Location` al detalle.</response>
+    /// <response code="400">Datos inválidos (cantidad, comprador o email).</response>
+    /// <response code="404">No existe el evento.</response>
+    /// <response code="422">Regla de negocio: sin cupo, fuera de plazo o sobre el límite por transacción.</response>
     [HttpPost("{id:guid}/reservas")]
     [EnableRateLimiting("reservas")]
     [ProducesResponseType(typeof(ReservaDto), StatusCodes.Status201Created)]
