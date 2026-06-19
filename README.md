@@ -85,8 +85,7 @@ define puertos (interfaces) que `Infrastructure` implementa; `Api` compone todo 
 
 ## Reglas de negocio y ambigüedades resueltas
 
-El enunciado contiene **contradicciones/imprecisiones intencionales**; detectarlas y resolverlas con
-criterio es parte del valor. Las decisiones tomadas:
+Las decisiones tomadas:
 
 | Caso | Resolución |
 |------|-----------|

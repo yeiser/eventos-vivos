@@ -58,7 +58,7 @@ jobs:
           /d:sonar.cs.opencover.reportsPaths="coverage-backend/**/coverage.opencover.xml"
           /d:sonar.javascript.lcov.reportPaths="frontend/eventos-vivos-web/coverage/eventos-vivos-web/lcov.info"
           /d:sonar.exclusions="**/bin/**,**/obj/**,**/Migrations/**,frontend/**/node_modules/**,frontend/**/dist/**,frontend/**/.angular/**,frontend/**/public/**,infra/**"
-          /d:sonar.coverage.exclusions="**/Migrations/**,**/Program.cs,backend/tests/**,**/*.spec.ts,frontend/**/src/main.ts,frontend/**/src/environments/**,frontend/**/*.config.ts"
+          /d:sonar.coverage.exclusions="**/Migrations/**,**/Program.cs,**/*DbContextFactory.cs,backend/tests/**,**/*.spec.ts,frontend/**/src/main.ts,frontend/**/src/environments/**,frontend/**/*.config.ts"
 
       - name: Build backend
         run: dotnet build backend/EventosVivos.slnx -c Release
