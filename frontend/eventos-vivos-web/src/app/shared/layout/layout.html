@@ -1,0 +1,12 @@
+<div class="ev-layout">
+  <app-aside />
+  <div class="ev-main d-flex flex-column">
+    <app-header />
+    <main class="ev-content flex-grow-1 p-8">
+      <router-outlet />
+    </main>
+    <footer class="ev-footer text-gray-600 px-8 py-4 border-top bg-white">
+      <span class="fw-semibold">© {{ anio }} EventosVivos</span>
+    </footer>
+  </div>
+</div>

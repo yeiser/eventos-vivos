@@ -1,0 +1,100 @@
+<div class="card shadow-sm">
+  <div class="card-header border-0 pt-6 d-flex flex-wrap align-items-center justify-content-between">
+    <h2 class="card-title fw-bold m-0">Eventos</h2>
+    @if (session.esAdmin()) {
+      <a class="btn btn-primary" routerLink="/eventos/nuevo">
+        <i class="la la-plus me-1"></i> Nuevo evento
+      </a>
+    }
+  </div>
+
+  <div class="card-body pt-2">
+    <!-- Toolbar de filtros (RF-02) -->
+    <form [formGroup]="filtros" (ngSubmit)="aplicar()" class="row g-3 mb-6">
+      <div class="col-sm-6 col-lg-3">
+        <input type="text" class="form-control form-control-solid" formControlName="titulo"
+               placeholder="Buscar por título…" />
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <select class="form-select form-select-solid" formControlName="tipo">
+          <option value="">Todo tipo</option>
+          @for (t of tipos; track t) {
+            <option [value]="t">{{ etiquetaTipo(t) }}</option>
+          }
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <select class="form-select form-select-solid" formControlName="estado">
+          <option value="">Todo estado</option>
+          @for (e of estados; track e) {
+            <option [value]="e">{{ etiquetaEstadoEvento(e) }}</option>
+          }
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-2">
+        <select class="form-select form-select-solid" formControlName="venueId">
+          <option value="">Todo venue</option>
+          @for (v of venues(); track v.id) {
+            <option [value]="v.id">{{ v.nombre }}</option>
+          }
+        </select>
+      </div>
+      <div class="col-lg-3 d-flex gap-2">
+        <button type="submit" class="btn btn-light-primary flex-grow-1">
+          <i class="la la-search me-1"></i> Filtrar
+        </button>
+        <button type="button" class="btn btn-light" (click)="limpiar()">Limpiar</button>
+      </div>
+    </form>
+
+    <!-- Tabla -->
+    <div class="table-responsive">
+      <table class="table table-row-bordered table-row-gray-200 align-middle gy-3">
+        <thead>
+          <tr class="fw-bold text-muted fs-7 text-uppercase">
+            <th>Título</th>
+            <th>Tipo</th>
+            <th>Venue</th>
+            <th>Inicio</th>
+            <th>Estado</th>
+            <th class="text-end">Disponibles</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of eventos(); track e.id) {
+            <tr>
+              <td class="fw-semibold text-gray-800">{{ e.titulo }}</td>
+              <td>{{ etiquetaTipo(e.tipo) }}</td>
+              <td>{{ nombreVenue(e.venueId) }}</td>
+              <td>{{ e.fechaInicio | date: 'dd/MM/yyyy HH:mm' }}</td>
+              <td><span class="badge {{ badgeEstadoEvento(e.estado) }}">{{ etiquetaEstadoEvento(e.estado) }}</span></td>
+              <td class="text-end">{{ e.entradasDisponibles }} / {{ e.capacidadMaxima }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-light-primary" [routerLink]="['/eventos', e.id]">Ver</a>
+              </td>
+            </tr>
+          } @empty {
+            @if (!cargando()) {
+              <tr><td colspan="7" class="text-center text-muted py-10">No hay eventos que coincidan con el filtro.</td></tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (cargando()) {
+      <div class="text-center text-muted py-6"><span class="spinner-border spinner-border-sm me-2"></span> Cargando…</div>
+    }
+
+    <!-- Paginación -->
+    <div class="d-flex align-items-center justify-content-between mt-4">
+      <span class="text-muted fs-7">{{ total() }} evento(s)</span>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-light" [disabled]="pagina() <= 1" (click)="irPagina(pagina() - 1)">Anterior</button>
+        <span class="btn btn-sm btn-light disabled">{{ pagina() }} / {{ totalPaginas() }}</span>
+        <button class="btn btn-sm btn-light" [disabled]="pagina() >= totalPaginas()" (click)="irPagina(pagina() + 1)">Siguiente</button>
+      </div>
+    </div>
+  </div>
+</div>

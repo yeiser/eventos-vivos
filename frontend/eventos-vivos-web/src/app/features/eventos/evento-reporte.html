@@ -1,0 +1,58 @@
+@if (cargando()) {
+  <div class="text-center text-muted py-10"><span class="spinner-border me-2"></span> Cargando…</div>
+} @else if (reporte(); as r) {
+  <div class="card shadow-sm">
+    <div class="card-header border-0 pt-6 d-flex align-items-center justify-content-between">
+      <div>
+        <h2 class="card-title fw-bold m-0">Reporte de ocupación</h2>
+        <span class="text-muted">{{ r.titulo }}</span>
+      </div>
+      <a class="btn btn-light" [routerLink]="['/eventos', id]">Volver</a>
+    </div>
+
+    <div class="card-body">
+      <div class="row g-6 align-items-center">
+        <div class="col-md-5 text-center">
+          <apx-chart
+            [series]="chart().series"
+            [chart]="chart().chart"
+            [plotOptions]="chart().plotOptions"
+            [colors]="chart().colors"
+            [labels]="chart().labels"
+          />
+        </div>
+
+        <div class="col-md-7">
+          <div class="row g-5">
+            <div class="col-6">
+              <div class="border border-dashed rounded p-5">
+                <div class="fs-2 fw-bold text-success">{{ r.entradasVendidas }}</div>
+                <div class="text-muted">Entradas vendidas</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="border border-dashed rounded p-5">
+                <div class="fs-2 fw-bold text-primary">{{ r.entradasDisponibles }}</div>
+                <div class="text-muted">Disponibles</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="border border-dashed rounded p-5">
+                <div class="fs-2 fw-bold text-gray-800">{{ r.ingresosTotales | number: '1.2-2' }}</div>
+                <div class="text-muted">Ingresos (USD)</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="border border-dashed rounded p-5">
+                <span class="badge {{ badgeEstadoEvento(r.estado) }} fs-6">{{ etiquetaEstadoEvento(r.estado) }}</span>
+                <div class="text-muted mt-2">Estado del evento</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+} @else {
+  <div class="alert alert-warning">No se pudo cargar el reporte.</div>
+}

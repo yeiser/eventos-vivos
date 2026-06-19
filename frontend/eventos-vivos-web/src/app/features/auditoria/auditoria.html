@@ -1,0 +1,99 @@
+<div class="card shadow-sm">
+  <div class="card-header border-0 pt-6">
+    <h2 class="card-title fw-bold m-0">Auditoría</h2>
+  </div>
+
+  <div class="card-body pt-2">
+    <!-- Filtros -->
+    <form [formGroup]="filtros" (ngSubmit)="aplicar()" class="row g-3 mb-6">
+      <div class="col-sm-6 col-lg-3">
+        <select class="form-select form-select-solid" formControlName="entidad">
+          <option value="">Toda entidad</option>
+          @for (e of entidades; track e) { <option [value]="e">{{ e }}</option> }
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <select class="form-select form-select-solid" formControlName="accion">
+          <option value="">Toda acción</option>
+          @for (a of acciones; track a) { <option [value]="a">{{ etiquetaAccion(a) }}</option> }
+        </select>
+      </div>
+      <div class="col-sm-6 col-lg-3">
+        <input type="text" class="form-control form-control-solid" formControlName="usuario" placeholder="Usuario…" />
+      </div>
+      <div class="col-lg-3 d-flex gap-2">
+        <button type="submit" class="btn btn-light-primary flex-grow-1"><i class="la la-search me-1"></i> Filtrar</button>
+        <button type="button" class="btn btn-light" (click)="limpiar()">Limpiar</button>
+      </div>
+    </form>
+
+    <div class="table-responsive">
+      <table class="table table-row-bordered table-row-gray-200 align-middle gy-3">
+        <thead>
+          <tr class="fw-bold text-muted fs-7 text-uppercase">
+            <th>Fecha</th>
+            <th>Entidad</th>
+            <th>Acción</th>
+            <th>Usuario</th>
+            <th>IP</th>
+            <th class="text-end">Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (a of items(); track a.id) {
+            <tr>
+              <td>{{ a.fecha | date: 'dd/MM/yyyy HH:mm:ss' }}</td>
+              <td><span class="fw-semibold text-gray-800">{{ a.entidad }}</span> <span class="text-muted fs-8 d-block">{{ a.entidadId }}</span></td>
+              <td><span class="badge {{ badgeAccion(a.accion) }}">{{ etiquetaAccion(a.accion) }}</span></td>
+              <td>{{ a.usuario }}</td>
+              <td class="text-muted">{{ a.ipOrigen ?? '—' }}</td>
+              <td class="text-end">
+                <button class="btn btn-sm btn-light" (click)="alternarDetalle(a.id)">
+                  {{ expandido() === a.id ? 'Ocultar' : 'Ver' }}
+                </button>
+              </td>
+            </tr>
+            @if (expandido() === a.id) {
+              <tr>
+                <td colspan="6" class="bg-light">
+                  <div class="row g-4 p-2">
+                    @if (a.valoresAnteriores) {
+                      <div class="col-md-6">
+                        <div class="text-muted fs-7 fw-bold text-uppercase mb-1">Valores anteriores</div>
+                        <pre class="bg-light rounded p-3 mb-0 fs-8">{{ formatearJson(a.valoresAnteriores) }}</pre>
+                      </div>
+                    }
+                    @if (a.valoresNuevos) {
+                      <div class="col-md-6">
+                        <div class="text-muted fs-7 fw-bold text-uppercase mb-1">Valores nuevos</div>
+                        <pre class="bg-light rounded p-3 mb-0 fs-8">{{ formatearJson(a.valoresNuevos) }}</pre>
+                      </div>
+                    }
+                  </div>
+                  @if (a.traceId) { <div class="text-muted fs-8 px-2 pb-2">traceId: {{ a.traceId }}</div> }
+                </td>
+              </tr>
+            }
+          } @empty {
+            @if (!cargando()) {
+              <tr><td colspan="6" class="text-center text-muted py-10">No hay registros de auditoría que coincidan.</td></tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (cargando()) {
+      <div class="text-center text-muted py-6"><span class="spinner-border spinner-border-sm me-2"></span> Cargando…</div>
+    }
+
+    <div class="d-flex align-items-center justify-content-between mt-4">
+      <span class="text-muted fs-7">{{ total() }} registro(s)</span>
+      <div class="btn-group">
+        <button class="btn btn-sm btn-light" [disabled]="pagina() <= 1" (click)="irPagina(pagina() - 1)">Anterior</button>
+        <span class="btn btn-sm btn-light disabled">{{ pagina() }} / {{ totalPaginas() }}</span>
+        <button class="btn btn-sm btn-light" [disabled]="pagina() >= totalPaginas()" (click)="irPagina(pagina() + 1)">Siguiente</button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,8 @@
+<div class="ev-toasts">
+  @for (n of noti.items(); track n.id) {
+    <div class="alert alert-{{ n.tipo }} d-flex align-items-center shadow-sm mb-3">
+      <span class="flex-grow-1">{{ n.mensaje }}</span>
+      <button type="button" class="btn-close ms-3" aria-label="Cerrar" (click)="noti.cerrar(n.id)"></button>
+    </div>
+  }
+</div>

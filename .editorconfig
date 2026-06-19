@@ -1,0 +1,40 @@
+root = true
+
+# Todos los archivos
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Archivos C#
+[*.cs]
+indent_size = 4
+# Organización de usings
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+# Preferencias de estilo
+csharp_style_namespace_declarations = file_scoped:suggestion
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+csharp_prefer_braces = true:suggestion
+csharp_style_var_for_built_in_types = false:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
+
+# Proyectos y configuración
+[*.{csproj,props,targets}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+# Frontend (Angular / TS)
+[*.{ts,js,html,scss,css}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false

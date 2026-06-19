@@ -1,0 +1,47 @@
+@if (cargando()) {
+  <div class="text-center text-muted py-10"><span class="spinner-border me-2"></span> Cargando…</div>
+} @else if (reserva(); as r) {
+  <div class="card shadow-sm" style="max-width: 720px;">
+    <div class="card-header border-0 pt-6 d-flex align-items-center justify-content-between">
+      <div>
+        <h2 class="card-title fw-bold m-0">Reserva</h2>
+        <span class="badge {{ badgeEstadoReserva(r.estado) }} mt-2">{{ etiquetaEstadoReserva(r.estado) }}</span>
+      </div>
+      <a class="btn btn-light" [routerLink]="['/eventos', r.eventoId]">Ver evento</a>
+    </div>
+
+    <div class="card-body">
+      <div class="row g-4">
+        <div class="col-md-6"><span class="text-muted">Comprador:</span> <span class="fw-semibold">{{ r.nombreComprador }}</span></div>
+        <div class="col-md-6"><span class="text-muted">Email:</span> <span class="fw-semibold">{{ r.emailComprador }}</span></div>
+        <div class="col-md-6"><span class="text-muted">Cantidad:</span> <span class="fw-semibold">{{ r.cantidad }}</span></div>
+        <div class="col-md-6"><span class="text-muted">Código:</span> <span class="fw-semibold">{{ r.codigo ?? '—' }}</span></div>
+        <div class="col-md-6"><span class="text-muted">Reservada:</span> <span class="fw-semibold">{{ r.fechaReserva | date: 'dd/MM/yyyy HH:mm' }}</span></div>
+        @if (r.fechaConfirmacion) {
+          <div class="col-md-6"><span class="text-muted">Confirmada:</span> <span class="fw-semibold">{{ r.fechaConfirmacion | date: 'dd/MM/yyyy HH:mm' }}</span></div>
+        }
+        @if (r.fechaCancelacion) {
+          <div class="col-md-6"><span class="text-muted">Cancelada:</span> <span class="fw-semibold">{{ r.fechaCancelacion | date: 'dd/MM/yyyy HH:mm' }}</span></div>
+        }
+      </div>
+
+      @if (puedeConfirmar() || puedeCancelar()) {
+        <div class="separator my-6"></div>
+        <div class="d-flex justify-content-end gap-2">
+          @if (puedeCancelar()) {
+            <button class="btn btn-light-danger" [disabled]="accionando()" (click)="cancelar()">
+              <i class="la la-times me-1"></i> Cancelar reserva
+            </button>
+          }
+          @if (puedeConfirmar()) {
+            <button class="btn btn-success" [disabled]="accionando()" (click)="confirmar()">
+              <i class="la la-check me-1"></i> Confirmar pago
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+} @else {
+  <div class="alert alert-warning">No se encontró la reserva.</div>
+}

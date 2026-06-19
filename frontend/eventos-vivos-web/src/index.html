@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>EventosVivos</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- Tema Metronic 8 (assets en public/metronic; ver README / ADR-008) -->
+  <link href="metronic/plugins/global/plugins.bundle.css" rel="stylesheet" type="text/css" />
+  <link href="metronic/css/style.bundle.css" rel="stylesheet" type="text/css" />
+</head>
+<body id="kt_body" class="app-default">
+  <app-root></app-root>
+
+  <!--
+    Solo usamos el CSS de Metronic. Sus bundles JS (plugins/scripts) NO se cargan porque incluyen
+    su propia ApexCharts/jQuery, que entran en conflicto con las librerías de Angular (ng-apexcharts).
+    La app no usa componentes JS de Metronic (menús simples + selects nativos).
+  -->
+</body>
+</html>

@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# .NET / Visual Studio
+# ---------------------------------------------------------------------------
+bin/
+obj/
+out/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+artifacts/
+[Dd]ebug/
+[Rr]elease/
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+*.received.*
+
+# ---------------------------------------------------------------------------
+# Rider / VS Code / editores
+# ---------------------------------------------------------------------------
+.idea/
+.claude/
+*.swp
+*~
+
+# ---------------------------------------------------------------------------
+# Angular / Node (frontend)
+# ---------------------------------------------------------------------------
+node_modules/
+frontend/**/dist/
+frontend/**/.angular/
+frontend/**/coverage/
+npm-debug.log*
+yarn-error.log*
+
+# Assets del tema Metronic (licencia comercial — NO versionar; ver README / ADR-008)
+frontend/**/public/metronic/
+frontend/**/src/assets/metronic/
+
+# ---------------------------------------------------------------------------
+# Docker
+# ---------------------------------------------------------------------------
+**/.docker/
+
+# ---------------------------------------------------------------------------
+# Terraform / Azure (infraestructura)
+# ---------------------------------------------------------------------------
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+*.tfvars.local
+# tfvars de entorno pueden contener datos sensibles
+infra/terraform/envs/*.auto.tfvars
+
+# ---------------------------------------------------------------------------
+# Secretos / configuración local
+# ---------------------------------------------------------------------------
+*.env
+.env
+.env.*
+appsettings.*.local.json
+secrets.json
+
+# ---------------------------------------------------------------------------
+# Documentación: solo se versiona el README.md de la raíz (el resto de .md queda fuera)
+# ---------------------------------------------------------------------------
+*.md
+!/README.md

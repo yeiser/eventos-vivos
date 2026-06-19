@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EventosVivos.Api/EventosVivos.Api.csproj" />
+    <Project Path="src/EventosVivos.Application/EventosVivos.Application.csproj" />
+    <Project Path="src/EventosVivos.Domain/EventosVivos.Domain.csproj" />
+    <Project Path="src/EventosVivos.Infrastructure/EventosVivos.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EventosVivos.Api.IntegrationTests/EventosVivos.Api.IntegrationTests.csproj" />
+    <Project Path="tests/EventosVivos.Application.Tests/EventosVivos.Application.Tests.csproj" />
+    <Project Path="tests/EventosVivos.Domain.Tests/EventosVivos.Domain.Tests.csproj" />
+  </Folder>
+</Solution>

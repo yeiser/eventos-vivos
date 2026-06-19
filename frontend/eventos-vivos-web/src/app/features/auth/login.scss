@@ -1,0 +1,16 @@
+.ev-auth {
+  background: linear-gradient(135deg, #1e1e2d 0%, #2b2b40 100%);
+}
+
+.ev-auth__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 0.85rem;
+  background: var(--bs-primary, #009ef7);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.25rem;
+}

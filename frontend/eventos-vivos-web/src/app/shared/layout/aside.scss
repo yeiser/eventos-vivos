@@ -1,0 +1,30 @@
+.ev-aside {
+  width: 265px;
+  min-width: 265px;
+  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  background: #1e1e2d;
+}
+
+.ev-aside__brand {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ev-aside__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 0.65rem;
+  background: var(--bs-primary, #009ef7);
+  color: #fff;
+  font-weight: 700;
+}
+
+.menu-link.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff !important;
+}

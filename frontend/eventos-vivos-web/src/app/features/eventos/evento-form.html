@@ -1,0 +1,85 @@
+<div class="card shadow-sm">
+  <div class="card-header border-0 pt-6">
+    <h2 class="card-title fw-bold">Nuevo evento</h2>
+  </div>
+
+  <div class="card-body">
+    <form [formGroup]="form" (ngSubmit)="crear()" novalidate>
+      <div class="row g-5">
+        <div class="col-md-8">
+          <label class="form-label required fw-semibold">Título</label>
+          <input type="text" class="form-control form-control-solid" formControlName="titulo" />
+          @if (invalido('titulo')) { <div class="text-danger fs-7 mt-1">Entre 5 y 100 caracteres.</div> }
+        </div>
+
+        <div class="col-md-4">
+          <label class="form-label required fw-semibold">Tipo</label>
+          <select class="form-select form-select-solid" formControlName="tipo">
+            <option value="">Seleccione…</option>
+            @for (t of tipos; track t) { <option [value]="t">{{ etiquetaTipo(t) }}</option> }
+          </select>
+          @if (invalido('tipo')) { <div class="text-danger fs-7 mt-1">El tipo es obligatorio.</div> }
+        </div>
+
+        <div class="col-12">
+          <label class="form-label required fw-semibold">Descripción</label>
+          <textarea class="form-control form-control-solid" rows="3" formControlName="descripcion"></textarea>
+          @if (invalido('descripcion')) { <div class="text-danger fs-7 mt-1">Entre 10 y 500 caracteres.</div> }
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label required fw-semibold">Venue</label>
+          <select class="form-select form-select-solid" formControlName="venueId">
+            <option value="">Seleccione…</option>
+            @for (v of venues(); track v.id) { <option [value]="v.id">{{ v.nombre }} (cap. {{ v.capacidad }})</option> }
+          </select>
+          @if (invalido('venueId')) { <div class="text-danger fs-7 mt-1">El venue es obligatorio.</div> }
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label required fw-semibold">Capacidad máxima</label>
+          <input type="number" min="1" class="form-control form-control-solid" formControlName="capacidadMaxima" />
+          @if (invalido('capacidadMaxima')) { <div class="text-danger fs-7 mt-1">Entero positivo (≤ capacidad del venue).</div> }
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label required fw-semibold">Precio (USD)</label>
+          <input type="number" min="0.01" step="0.01" class="form-control form-control-solid" formControlName="precio" />
+          @if (invalido('precio')) { <div class="text-danger fs-7 mt-1">Decimal positivo.</div> }
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label required fw-semibold">Inicio</label>
+          <input type="datetime-local" class="form-control form-control-solid" formControlName="fechaInicio" />
+          @if (invalido('fechaInicio')) { <div class="text-danger fs-7 mt-1">Fecha de inicio obligatoria (debe ser futura).</div> }
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label required fw-semibold">Fin</label>
+          <input type="datetime-local" class="form-control form-control-solid" formControlName="fechaFin" />
+          @if (invalido('fechaFin')) { <div class="text-danger fs-7 mt-1">Fecha de fin obligatoria (posterior al inicio).</div> }
+        </div>
+      </div>
+
+      @if (erroresServidor() | keyvalue; as errs) {
+        @if (errs.length) {
+          <div class="alert alert-danger mt-6">
+            <ul class="mb-0">
+              @for (e of errs; track e.key) {
+                @for (m of e.value; track m) { <li>{{ m }}</li> }
+              }
+            </ul>
+          </div>
+        }
+      }
+
+      <div class="d-flex justify-content-end gap-2 mt-8">
+        <a class="btn btn-light" routerLink="/eventos">Cancelar</a>
+        <button type="submit" class="btn btn-primary" [disabled]="guardando()">
+          @if (guardando()) { <span class="spinner-border spinner-border-sm me-2"></span> Guardando… }
+          @else { Crear evento }
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

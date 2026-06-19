@@ -1,0 +1,11 @@
+<header class="ev-header d-flex align-items-center justify-content-between px-8 bg-white border-bottom">
+  <h1 class="fs-3 fw-bold text-gray-800 m-0">Panel de control</h1>
+
+  <div class="d-flex align-items-center">
+    <span class="badge badge-light-primary me-4">{{ session.rol() }}</span>
+    <span class="fw-semibold text-gray-700 me-4">{{ session.nombreUsuario() }}</span>
+    <button type="button" class="btn btn-sm btn-light-danger" (click)="auth.logout()">
+      <i class="la la-sign-out-alt me-1"></i> Salir
+    </button>
+  </div>
+</header>

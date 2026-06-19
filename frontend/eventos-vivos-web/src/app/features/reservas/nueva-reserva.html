@@ -1,0 +1,59 @@
+<div class="card shadow-sm" style="max-width: 680px;">
+  <div class="card-header border-0 pt-6">
+    <h2 class="card-title fw-bold">Nueva reserva</h2>
+  </div>
+
+  <div class="card-body">
+    <form [formGroup]="form" (ngSubmit)="reservar()" novalidate>
+      <div class="mb-5">
+        <label class="form-label required fw-semibold">Evento</label>
+        <select class="form-select form-select-solid" formControlName="eventoId" (change)="seleccionarEvento()">
+          <option value="">Seleccione un evento…</option>
+          @for (e of eventos(); track e.id) {
+            <option [value]="e.id">{{ e.titulo }} ({{ etiquetaTipo(e.tipo) }} · {{ e.entradasDisponibles }} disp.)</option>
+          }
+        </select>
+        @if (invalido('eventoId')) { <div class="text-danger fs-7 mt-1">Seleccione un evento.</div> }
+      </div>
+
+      @if (eventoSel(); as e) {
+        @if (limite() === 0) {
+          <div class="alert alert-warning">
+            No es posible reservar en este evento ahora (sin cupo o con menos de 1 hora para iniciar).
+          </div>
+        } @else {
+          <div class="alert alert-light-primary">
+            Máximo <strong>{{ limite() }}</strong> entradas por transacción · {{ e.precio }} USD c/u.
+          </div>
+
+          <div class="mb-5">
+            <label class="form-label required fw-semibold">Cantidad</label>
+            <input type="number" min="1" [max]="limite()" class="form-control form-control-solid" formControlName="cantidad" />
+            @if (invalido('cantidad')) { <div class="text-danger fs-7 mt-1">La cantidad debe ser 1 o más.</div> }
+            @if (excedeLimite()) { <div class="text-danger fs-7 mt-1">No puede superar el límite de {{ limite() }}.</div> }
+          </div>
+
+          <div class="mb-5">
+            <label class="form-label required fw-semibold">Nombre del comprador</label>
+            <input type="text" class="form-control form-control-solid" formControlName="nombreComprador" />
+            @if (invalido('nombreComprador')) { <div class="text-danger fs-7 mt-1">El nombre es obligatorio.</div> }
+          </div>
+
+          <div class="mb-8">
+            <label class="form-label required fw-semibold">Email del comprador</label>
+            <input type="email" class="form-control form-control-solid" formControlName="emailComprador" />
+            @if (invalido('emailComprador')) { <div class="text-danger fs-7 mt-1">Ingrese un email válido.</div> }
+          </div>
+        }
+      }
+
+      <div class="d-flex justify-content-end gap-2">
+        <a class="btn btn-light" routerLink="/reservas">Cancelar</a>
+        <button type="submit" class="btn btn-primary" [disabled]="guardando() || !eventoSel() || limite() === 0">
+          @if (guardando()) { <span class="spinner-border spinner-border-sm me-2"></span> Reservando… }
+          @else { Reservar }
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

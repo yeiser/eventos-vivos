@@ -1,0 +1,31 @@
+<aside class="ev-aside d-flex flex-column">
+  <div class="ev-aside__brand d-flex align-items-center px-6 py-5">
+    <span class="ev-aside__logo">EV</span>
+    <span class="text-white fw-bold fs-4 ms-3">EventosVivos</span>
+  </div>
+
+  <div class="menu menu-column menu-rounded menu-title-gray-300 menu-icon-gray-400 px-4 py-2 flex-grow-1">
+    <div class="menu-item">
+      <a class="menu-link" routerLink="/eventos" routerLinkActive="active">
+        <span class="menu-icon"><i class="la la-calendar fs-3"></i></span>
+        <span class="menu-title">Eventos</span>
+      </a>
+    </div>
+
+    @if (session.esAdmin()) {
+      <div class="menu-item">
+        <a class="menu-link" routerLink="/reservas" routerLinkActive="active">
+          <span class="menu-icon"><i class="la la-ticket fs-3"></i></span>
+          <span class="menu-title">Reservas</span>
+        </a>
+      </div>
+
+      <div class="menu-item">
+        <a class="menu-link" routerLink="/auditoria" routerLinkActive="active">
+          <span class="menu-icon"><i class="la la-history fs-3"></i></span>
+          <span class="menu-title">Auditoría</span>
+        </a>
+      </div>
+    }
+  </div>
+</aside>

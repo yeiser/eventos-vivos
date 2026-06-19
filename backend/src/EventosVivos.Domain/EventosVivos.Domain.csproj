@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Permite a las pruebas usar miembros internos del dominio (p. ej. Reserva.Crear). -->
+    <InternalsVisibleTo Include="EventosVivos.Domain.Tests" />
+  </ItemGroup>
+
+</Project>
