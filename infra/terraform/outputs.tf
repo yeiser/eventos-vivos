@@ -1,6 +1,6 @@
 output "url" {
   description = "URL pública de la aplicación (frontend + API por el mismo origen)."
-  value       = "http://${azurerm_container_group.app.fqdn}"
+  value       = "http://${azurerm_container_group.app.fqdn}:8080"
 }
 
 output "fqdn" {

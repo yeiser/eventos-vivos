@@ -309,11 +309,15 @@ Como es un entorno **solo para mostrar**, la infraestructura es la **mínima**: 
 ```
 Azure Resource Group (eventosvivos-rg)
  ├─ Container Registry (Basic)         # imágenes privadas: api, web, postgres
- └─ Container Group (ACI, IP pública)  # http://<dns-label>.<region>.azurecontainer.io
-     ├─ db   (postgres:16-alpine)      # efímero; los datos se regeneran con el seed
-     ├─ api  (.NET 10, migra + siembra al arrancar)
-     └─ web  (Nginx: estáticos + proxy /api → localhost:8080)   ◄── único puerto público (80)
+ └─ Container Group (ACI, IP pública)  # http://<dns-label>.<region>.azurecontainer.io:8080
+     ├─ db   (postgres:16-alpine)      # efímero (localhost:5432); los datos se regeneran con el seed
+     ├─ api  (.NET 10, migra + siembra; escucha en localhost:5000)
+     └─ web  (Nginx no-root: estáticos + proxy /api → localhost:5000)   ◄── único puerto público (8080)
 ```
+
+> Los tres contenedores comparten la red del grupo, así que escuchan en puertos **distintos**
+> (db 5432, api 5000, web 8080). El frontend usa la imagen `nginx-unprivileged` (corre como
+> usuario no-root) y por eso el puerto público es **8080**.
 
 **Sin** VM, **sin** base de datos gestionada, **sin** Key Vault: los secretos (contraseña de
 PostgreSQL y clave JWT) se generan aleatoriamente con Terraform y se inyectan como variables

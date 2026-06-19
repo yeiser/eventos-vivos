@@ -58,24 +58,20 @@ resource "azurerm_container_group" "app" {
     password = azurerm_container_registry.acr.admin_password
   }
 
-  # Solo el frontend (puerto 80) queda expuesto a Internet.
+  # Solo el frontend (puerto 8080, Nginx no-root) queda expuesto a Internet.
   exposed_port {
-    port     = 80
+    port     = 8080
     protocol = "TCP"
   }
 
   # --- PostgreSQL (efímero: los datos se regeneran con el seed al arrancar) ---
   # Se sirve desde el ACR (no desde Docker Hub) para evitar su límite de pulls anónimos.
+  # Sin bloque `ports`: es interno, los demás contenedores lo alcanzan por localhost:5432.
   container {
     name   = "db"
     image  = "${azurerm_container_registry.acr.login_server}/postgres:16-alpine"
     cpu    = var.db_cpu
     memory = var.db_memory
-
-    ports {
-      port     = 5432
-      protocol = "TCP"
-    }
 
     environment_variables = {
       POSTGRES_DB   = var.postgres_db
@@ -87,22 +83,20 @@ resource "azurerm_container_group" "app" {
   }
 
   # --- API .NET (migra + siembra al arrancar) ---
+  # Sin bloque `ports`: es interno, el frontend la alcanza por localhost:8080.
   container {
     name   = "api"
     image  = "${azurerm_container_registry.acr.login_server}/eventosvivos-api:${var.image_tag}"
     cpu    = var.api_cpu
     memory = var.api_memory
 
-    ports {
-      port     = 8080
-      protocol = "TCP"
-    }
-
+    # En el grupo ACI los contenedores comparten red: la API escucha en 5000 para no
+    # colisionar con Nginx (8080). El frontend la alcanza por localhost:5000.
     environment_variables = {
       ASPNETCORE_ENVIRONMENT = "Production"
-      ASPNETCORE_URLS        = "http://+:8080"
+      ASPNETCORE_URLS        = "http://+:5000"
       Database__AutoMigrate  = "true"
-      Cors__Origins__0       = "http://${local.fqdn}"
+      Cors__Origins__0       = "http://${local.fqdn}:8080"
     }
     secure_environment_variables = {
       ConnectionStrings__Postgres = "Host=localhost;Port=5432;Database=${var.postgres_db};Username=${var.postgres_user};Password=${random_password.pg.result}"
@@ -118,12 +112,12 @@ resource "azurerm_container_group" "app" {
     memory = var.web_memory
 
     ports {
-      port     = 80
+      port     = 8080
       protocol = "TCP"
     }
 
     environment_variables = {
-      API_UPSTREAM = "localhost:8080"
+      API_UPSTREAM = "localhost:5000"
     }
   }
 }

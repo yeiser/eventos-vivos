@@ -73,8 +73,8 @@ jobs:
       - name: Frontend — instalar y test con cobertura (lcov)
         working-directory: frontend/eventos-vivos-web
         run: |
-          npm ci
-          npx ng test --watch=false --coverage --coverage-reporters=lcovonly
+          npm ci --ignore-scripts
+          npm test -- --watch=false --coverage --coverage-reporters=lcovonly
 
       - name: End (publica a SonarCloud + Quality Gate)
         env:
