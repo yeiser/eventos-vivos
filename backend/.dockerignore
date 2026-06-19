@@ -1,0 +1,17 @@
+# Artefactos de build (se generan dentro de la imagen).
+**/bin/
+**/obj/
+**/out/
+artifacts/
+TestResults/
+*.trx
+
+# No copiar pruebas al contexto de build de la API (el publish solo necesita src/).
+tests/
+
+# Misc
+**/.vs/
+**/.idea/
+*.user
+Dockerfile
+.dockerignore

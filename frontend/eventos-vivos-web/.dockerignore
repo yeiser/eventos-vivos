@@ -1,0 +1,15 @@
+# Dependencias y artefactos (se generan dentro de la imagen).
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Misc
+.vscode/
+.idea/
+npm-debug.log*
+Dockerfile
+.dockerignore
+
+# NOTA: public/metronic NO se ignora: si los assets del tema están presentes en
+# disco (licencia), se incluyen en el build para que la app salga con estilos.

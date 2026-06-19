@@ -19,7 +19,9 @@ automatización de la validación de reservas y pagos.
 | Auth | JWT Bearer + roles (Admin/Usuario), PBKDF2, lockout anti-fuerza-bruta |
 | Frontend | **Angular 22** (standalone, zoneless, signals) + tema **Metronic 8** (Bootstrap 5) + ApexCharts |
 | Pruebas | xUnit, FluentAssertions, NSubstitute, **Testcontainers** (backend) · **Vitest** (frontend) |
-| Infra | Docker Compose · Terraform · Azure (despliegue) |
+| Empaquetado | **Docker** (multi-stage) + **Docker Compose** · **Nginx** (sirve la SPA y hace de proxy de la API) |
+| CI/CD | **GitHub Actions** (build + test de backend y frontend, smoke de imágenes) |
+| Infra | Terraform · Azure (despliegue) |
 
 ---
 
@@ -110,9 +112,14 @@ auto-completado, cancelación con penalización), todos con pruebas de borde.
 │   │   ├── EventosVivos.Infrastructure/ # EF Core, repos, interceptores, seed, JWT
 │   │   └── EventosVivos.Api/            # Controllers, middleware, auth, Swagger
 │   └── tests/                           # Domain / Application / Integration (Testcontainers)
+│   └── Dockerfile                       # Imagen multi-stage de la API
 ├── frontend/eventos-vivos-web/    # Angular 22 (standalone + signals) + tema Metronic
+│   ├── Dockerfile                       # Build de Angular + Nginx
+│   └── nginx.conf                       # SPA fallback + proxy /api → contenedor api
 ├── scripts/seed-demo.ps1          # Generador de datos de demostración (vía API)
-├── docker-compose.yml             # PostgreSQL para desarrollo
+├── .github/workflows/ci.yml       # CI: build + test (backend y frontend) + smoke Docker
+├── docker-compose.yml             # Stack local: db + api + frontend
+├── docker-compose.prod.yml        # Plantilla de despliegue (sin db; imágenes de registry)
 └── README.md
 ```
 
@@ -126,7 +133,35 @@ auto-completado, cancelación con penalización), todos con pruebas de borde.
 
 ---
 
-## Ejecución local
+## Ejecución con Docker Compose (recomendada)
+
+Levanta **todo el stack** (PostgreSQL + API + frontend) con un solo comando:
+
+```bash
+docker compose up --build
+```
+
+| Servicio | URL | Notas |
+|----------|-----|-------|
+| **Web** | http://localhost:8080 | SPA de Angular (Nginx) |
+| **API** | http://localhost:5080 | Swagger en `/swagger` |
+| **DB** | localhost:5440 | PostgreSQL (puerto 5440 para no chocar con uno local) |
+
+La API aplica migraciones y siembra datos al arrancar (`Database__AutoMigrate=true`). El frontend
+llama a la API por **ruta relativa** (`/api/v1`): Nginx hace de *reverse proxy* hacia el contenedor
+`api`, así que **no hay CORS** en este modo. Credenciales de demo: `admin` / `Admin123!` y
+`usuario` / `Usuario123!`.
+
+> Puertos configurables por variables de entorno: `WEB_PORT` (8080), `API_PORT` (5080),
+> `POSTGRES_PORT` (5440). El secreto JWT se inyecta con `JWT_SECRET`.
+> Para parar y borrar el volumen de datos: `docker compose down -v`.
+
+Para producción existe `docker-compose.prod.yml` (sin contenedor de base de datos —usa PostgreSQL
+gestionado— e imágenes desde un registry; todo secreto se inyecta por variable de entorno).
+
+---
+
+## Ejecución local (sin Docker)
 
 ### 1. Base de datos (PostgreSQL vía Docker)
 
@@ -136,26 +171,26 @@ docker compose ps        # verificar estado "healthy"
 ```
 
 Variables configurables (con valores por defecto de desarrollo): `POSTGRES_DB`, `POSTGRES_USER`,
-`POSTGRES_PASSWORD`, `POSTGRES_PORT`.
+`POSTGRES_PASSWORD`, `POSTGRES_PORT` (por defecto **5440**, para no chocar con un PostgreSQL local en
+el 5432).
 
 ### 2. Backend
+
+Como la base de datos se publica en el **5440**, se pasa la cadena de conexión a la API:
 
 ```bash
 cd backend
 dotnet build
 dotnet test                                  # pruebas (incluye integración con Testcontainers)
-dotnet run --project src/EventosVivos.Api    # API + Swagger en /swagger
+ConnectionStrings__Postgres="Host=127.0.0.1;Port=5440;Database=eventosvivos;Username=eventosvivos;Password=eventosvivos_dev" \
+  dotnet run --project src/EventosVivos.Api  # API + Swagger en /swagger
 ```
 
 La API aplica migraciones y siembra datos al arrancar (en `Development`). Credenciales de demo:
 `admin` / `Admin123!` y `usuario` / `Usuario123!`.
 
-> **Conflicto de puertos (PostgreSQL local):** si ya tienes un PostgreSQL en el 5432, usa otro puerto:
-> ```bash
-> POSTGRES_PORT=5440 docker compose up -d db
-> ConnectionStrings__Postgres="Host=127.0.0.1;Port=5440;Database=eventosvivos;Username=eventosvivos;Password=eventosvivos_dev" \
->   dotnet run --project src/EventosVivos.Api
-> ```
+> Si prefieres no pasar la cadena, levanta la DB en el puerto que espera `appsettings.json` (5432)
+> con `POSTGRES_PORT=5432 docker compose up -d db` —siempre que el 5432 esté libre.
 
 ### 3. Frontend (Angular 22 + tema Metronic)
 
@@ -213,6 +248,19 @@ cd frontend/eventos-vivos-web && npx ng test --watch=false
 | `GET` | `/reservas/{id}` | Usuario/Admin |
 
 Errores en formato `application/problem+json` (RFC 7807) con código de regla y `traceId`.
+
+---
+
+## Integración continua y empaquetado
+
+- **GitHub Actions** (`.github/workflows/ci.yml`) en cada *push*/PR a `main`:
+  1. **Backend** — `restore` + `build` + `dotnet test` (incluye integración con Testcontainers).
+  2. **Frontend** — `npm ci` + `build` + `ng test` (Vitest).
+  3. **Smoke Docker** — construye las imágenes de API y Web para validar los `Dockerfile`.
+- **Imágenes multi-stage**: la API publica sobre `aspnet:10.0` corriendo como usuario **no-root**; el
+  frontend compila con Node y se sirve con **Nginx** (estáticos + proxy `/api`).
+- El stack completo se valida de extremo a extremo con `docker compose up --build`
+  (login, listado de eventos y SPA verificados a través del proxy de Nginx).
 
 ---
 

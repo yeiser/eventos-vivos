@@ -109,10 +109,20 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
+}
+
+// Migración + seed al arrancar. Automático en Development; en contenedores/producción se
+// activa con Database:AutoMigrate=true (en Azure las migraciones pueden correr como paso aparte).
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Database:AutoMigrate"))
+{
     await app.Services.InitializeDatabaseAsync();
 }
 
-app.UseHttpsRedirection();
+// Detrás de Nginx/Ingress el TLS se termina en el proxy; dentro del contenedor la API es HTTP.
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors(CorsPolicy);
 app.UseRateLimiter();
 app.UseAuthentication();
