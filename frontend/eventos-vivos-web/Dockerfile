@@ -16,8 +16,10 @@ RUN npm run build
 
 # ---------- runtime ----------
 FROM nginx:1.27-alpine AS final
-# El proxy /api/ y el fallback SPA están en nginx.conf.
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# nginx.conf es una plantilla: el entrypoint hace envsubst de ${API_UPSTREAM} al arrancar.
+# Por defecto apunta al servicio "api" del compose; en ACI se sobreescribe a localhost:8080.
+ENV API_UPSTREAM=api:8080
+COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist/eventos-vivos-web/browser /usr/share/nginx/html
 EXPOSE 80
 HEALTHCHECK --interval=15s --timeout=3s --start-period=5s --retries=5 \

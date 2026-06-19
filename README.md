@@ -21,7 +21,7 @@ automatización de la validación de reservas y pagos.
 | Pruebas | xUnit, FluentAssertions, NSubstitute, **Testcontainers** (backend) · **Vitest** (frontend) |
 | Empaquetado | **Docker** (multi-stage) + **Docker Compose** · **Nginx** (sirve la SPA y hace de proxy de la API) |
 | CI/CD | **GitHub Actions** (build + test de backend y frontend, smoke de imágenes) |
-| Infra | Terraform · Azure (despliegue) |
+| Infra | **Terraform** · **Azure Container Instances** (ambiente de demostración mínimo) |
 
 ---
 
@@ -261,6 +261,58 @@ Errores en formato `application/problem+json` (RFC 7807) con código de regla y 
   frontend compila con Node y se sirve con **Nginx** (estáticos + proxy `/api`).
 - El stack completo se valida de extremo a extremo con `docker compose up --build`
   (login, listado de eventos y SPA verificados a través del proxy de Nginx).
+
+---
+
+## Despliegue en Azure (ambiente de demostración)
+
+Como es un entorno **solo para mostrar**, la infraestructura es la **mínima**: un único
+**grupo de contenedores de Azure Container Instances (ACI)** con tres contenedores
+(PostgreSQL + API + frontend) que comparten red y se comunican por `localhost`. El frontend
+(Nginx) es el único expuesto a Internet y hace de proxy de la API → **mismo origen, sin CORS**.
+
+```
+Azure Resource Group (eventosvivos-rg)
+ ├─ Container Registry (Basic)         # imágenes privadas: api, web, postgres
+ └─ Container Group (ACI, IP pública)  # http://<dns-label>.<region>.azurecontainer.io
+     ├─ db   (postgres:16-alpine)      # efímero; los datos se regeneran con el seed
+     ├─ api  (.NET 10, migra + siembra al arrancar)
+     └─ web  (Nginx: estáticos + proxy /api → localhost:8080)   ◄── único puerto público (80)
+```
+
+**Sin** VM, **sin** base de datos gestionada, **sin** Key Vault: los secretos (contraseña de
+PostgreSQL y clave JWT) se generan aleatoriamente con Terraform y se inyectan como variables
+seguras del contenedor. Recursos totales: **3** (Resource Group + ACR + Container Group).
+
+### Aprovisionar / liberar
+
+Terraform vive en [`infra/terraform/`](infra/terraform/); el script
+[`infra/deploy.ps1`](infra/deploy.ps1) orquesta el orden (crea el ACR → publica las imágenes →
+crea el ACI):
+
+```powershell
+az login
+pwsh ./infra/deploy.ps1               # despliega y muestra la URL pública
+pwsh ./infra/deploy.ps1 -Destroy      # libera TODA la infraestructura (terraform destroy)
+```
+
+Solo Terraform (validación / plan, sin aplicar):
+
+```bash
+cd infra/terraform
+terraform init && terraform validate && terraform plan
+```
+
+> **Datos de demo:** tras desplegar, opcionalmente puebla eventos/reservas con
+> `pwsh ./scripts/seed-demo.ps1 -ApiBase "<url>/api/v1"`.
+>
+> **Costo:** el grupo ACI factura mientras está encendido. Para pausar el gasto sin destruir:
+> `az container stop -g eventosvivos-rg -n eventosvivos-aci` (y `start` para reanudar). Para
+> eliminar todo: `pwsh ./infra/deploy.ps1 -Destroy`.
+>
+> **Autenticación de Terraform:** usa la sesión de `az`. Si la suscripción está en estado
+> *Warned*, crea un Service Principal y exporta `ARM_CLIENT_ID/SECRET`, `ARM_TENANT_ID`,
+> `ARM_SUBSCRIPTION_ID`.
 
 ---
 
