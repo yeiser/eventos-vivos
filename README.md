@@ -320,8 +320,17 @@ Errores en formato `application/problem+json` (RFC 7807) con código de regla y 
 
 ## Calidad de código (SonarCloud)
 
+[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=yeiser_eventos-vivos&metric=alert_status)](https://sonarcloud.io/project/overview?id=yeiser_eventos-vivos)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=yeiser_eventos-vivos&metric=coverage)](https://sonarcloud.io/project/overview?id=yeiser_eventos-vivos)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=yeiser_eventos-vivos&metric=bugs)](https://sonarcloud.io/project/overview?id=yeiser_eventos-vivos)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=yeiser_eventos-vivos&metric=vulnerabilities)](https://sonarcloud.io/project/overview?id=yeiser_eventos-vivos)
+
 El análisis estático y la cobertura se publican en **SonarQube Cloud** desde GitHub Actions
-([`.github/workflows/sonarcloud.yml`](.github/workflows/sonarcloud.yml)) en cada *push*/PR:
+([`.github/workflows/sonarcloud.yml`](.github/workflows/sonarcloud.yml)) en cada *push*/PR — backend
+con cobertura **OpenCover** (coverlet) y frontend con **lcov** (Vitest).
+
+📊 **Dashboard público** (el proyecto es *public*; se abre **sin cuenta ni login**):
+**https://sonarcloud.io/project/overview?id=yeiser_eventos-vivos**
 
 ---
 
