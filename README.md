@@ -323,33 +323,6 @@ Errores en formato `application/problem+json` (RFC 7807) con código de regla y 
 El análisis estático y la cobertura se publican en **SonarQube Cloud** desde GitHub Actions
 ([`.github/workflows/sonarcloud.yml`](.github/workflows/sonarcloud.yml)) en cada *push*/PR:
 
-- **Backend** — SonarScanner para .NET; cobertura **OpenCover** vía coverlet
-  ([`backend/coverlet.runsettings`](backend/coverlet.runsettings)).
-- **Frontend** — cobertura **lcov** con Vitest (`@vitest/coverage-v8`).
-- Quality Gate sobre el *new code*; el job se **omite** hasta que configures la organización.
-
-### Puesta en marcha (una sola vez)
-
-1. Entra en [sonarcloud.io](https://sonarcloud.io) con tu cuenta de **GitHub** y crea/usa una
-   **organización** ligada a tu cuenta; importa el repositorio `eventos-vivos`.
-2. En el proyecto: **Administration → Analysis Method → desactiva "Automatic Analysis"**
-   (usamos el análisis basado en CI; si no, chocan).
-3. Genera un **token** (My Account → Security) y añádelo en el repo de GitHub como
-   *secret* **`SONAR_TOKEN`** (Settings → Secrets and variables → Actions → *Secrets*).
-4. Añade dos *variables* (misma pantalla → *Variables*):
-   **`SONAR_ORGANIZATION`** (la *organization key*) y **`SONAR_PROJECT_KEY`** (la *project key*).
-5. Haz *push* a `main`: el workflow corre el análisis y publica el dashboard.
-
-### Cobertura en local (sin servidor)
-
-```bash
-# Backend (OpenCover)
-cd backend && dotnet test --settings coverlet.runsettings \
-  --collect:"XPlat Code Coverage" --results-directory coverage-backend
-# Frontend (lcov)
-cd frontend/eventos-vivos-web && npx ng test --watch=false --coverage --coverage-reporters=lcovonly
-```
-
 ---
 
 ## Despliegue en Azure (ambiente de demostración)
@@ -376,35 +349,53 @@ Azure Resource Group (eventosvivos-rg)
 PostgreSQL y clave JWT) se generan aleatoriamente con Terraform y se inyectan como variables
 seguras del contenedor. Recursos totales: **3** (Resource Group + ACR + Container Group).
 
-### Aprovisionar / liberar
+### Infraestructura sugerida para producción
 
-Terraform vive en [`infra/terraform/`](infra/terraform/); el script
-[`infra/deploy.ps1`](infra/deploy.ps1) orquesta el orden (crea el ACR → publica las imágenes →
-crea el ACI):
+La demo prioriza simplicidad y costo; un ambiente **productivo real** cambiaría ese compromiso por
+**alta disponibilidad, seguridad perimetral, secretos gestionados, observabilidad y autoescala**.
+Arquitectura recomendada en Azure:
 
-```powershell
-az login
-pwsh ./infra/deploy.ps1               # despliega y muestra la URL pública
-pwsh ./infra/deploy.ps1 -Destroy      # libera TODA la infraestructura (terraform destroy)
+```
+                          Internet  (dominio propio + HTTPS)
+                              │
+                   ┌──────────▼───────────┐
+                   │ Azure Front Door + WAF│  TLS · CDN · WAF (OWASP) · enrutado
+                   └─────┬───────────┬─────┘
+                  /      │           │  /api
+          ┌──────────────▼──┐   ┌────▼─────────────────────────┐
+          │ Static Web Apps │   │ Azure Container Apps (API)    │  autoescala (KEDA)
+          │  (SPA Angular)  │   │  .NET 10 · sin estado         │  revisiones/blue-green
+          └─────────────────┘   └────┬───────────┬─────────┬────┘
+                                     │ Managed Identity     │
+                       ┌─────────────▼───┐ ┌───────▼──────┐ ┌▼───────────────────────┐
+                       │ Key Vault        │ │ ACR (priv.)  │ │ PostgreSQL Flexible     │
+                       │ (JWT, conn. str.)│ │ imágenes     │ │ Server (HA zonal, PITR) │
+                       └──────────────────┘ └──────────────┘ └─────────────────────────┘
+                       └──────── VNet + Private Endpoints (DB y Key Vault sin IP pública) ───────┘
+
+   Observabilidad: Application Insights + Log Analytics (Azure Monitor)
+   CI/CD: GitHub Actions con OIDC → Azure · estado de Terraform en Azure Storage (con locking)
 ```
 
-Solo Terraform (validación / plan, sin aplicar):
+| Necesidad | Servicio Azure | Por qué |
+|---|---|---|
+| **Cómputo de la API** | **Azure Container Apps** | Serverless con **autoescala** (KEDA) por HTTP/CPU, revisiones (blue-green), ingress con TLS; sin administrar nodos. *AKS* solo si se necesita orquestación avanzada |
+| **Hosting del frontend** | **Azure Static Web Apps** (o Blob *static website* + CDN) | Distribución en el borde, barata y escalable para estáticos; CI integrado |
+| **Base de datos** | **Azure Database for PostgreSQL Flexible Server** | Gestionado, **HA zona-redundante**, backups automáticos + *point-in-time restore*. Es el mismo Postgres → conserva `FOR UPDATE`/`xmin` sin tocar el código |
+| **Registro de imágenes** | **Azure Container Registry** (Standard/Premium) | Privado, geo-replicación; *pull* con **Managed Identity** (sin credenciales) |
+| **Secretos** | **Azure Key Vault** + **Managed Identity** | Clave JWT y cadena de conexión fuera del entorno, con rotación; la app accede con identidad administrada → **cero secretos** en config/CI |
+| **Borde y seguridad perimetral** | **Azure Front Door (Premium) + WAF** | TLS, CDN, enrutado global y **WAF (OWASP)** que complementa el *rate-limit*/lockout de la app |
+| **Red privada** | **VNet + Private Endpoints + NSG** | PostgreSQL y Key Vault **sin exposición pública**; el tráfico no sale de la VNet |
+| **Observabilidad** | **Application Insights + Log Analytics** (Azure Monitor) | Trazas distribuidas (se correlacionan con el `traceId` de ProblemDetails), métricas y alertas; los logs estructurados de Serilog fluyen aquí |
+| **CI/CD** | **GitHub Actions con OIDC → Azure** | Despliegue federado **sin credenciales almacenadas**: build+push a ACR y *release* a Container Apps |
+| **Estado de Terraform** | **Azure Storage** (backend remoto con *locking*) | Estado compartido y bloqueado para trabajo en equipo (vs. el estado local de la demo) |
+| **DNS y certificados** | **Azure DNS + certificados gestionados** | Dominio propio con HTTPS automático |
 
-```bash
-cd infra/terraform
-terraform init && terraform validate && terraform plan
-```
-
-> **Datos de demo:** tras desplegar, opcionalmente puebla eventos/reservas con
-> `pwsh ./scripts/seed-demo.ps1 -ApiBase "<url>/api/v1"`.
->
-> **Costo:** el grupo ACI factura mientras está encendido. Para pausar el gasto sin destruir:
-> `az container stop -g eventosvivos-rg -n eventosvivos-aci` (y `start` para reanudar). Para
-> eliminar todo: `pwsh ./infra/deploy.ps1 -Destroy`.
->
-> **Autenticación de Terraform:** usa la sesión de `az`. Si la suscripción está en estado
-> *Warned*, crea un Service Principal y exporta `ARM_CLIENT_ID/SECRET`, `ARM_TENANT_ID`,
-> `ARM_SUBSCRIPTION_ID`.
+> **Lo que NO cambia es el código:** como la **concurrencia vive en la base de datos** (transacción +
+> `FOR UPDATE` + `xmin`) y la **API es sin estado** (JWT), se puede **escalar horizontalmente** sin tocar
+> el dominio. Lo que cambia es el *entorno*: servicios gestionados, HA, secretos en Key Vault con Managed
+> Identity, red privada, WAF y observabilidad. La migración desde la demo es sustituir recursos en
+> Terraform (ACI → Container Apps + PostgreSQL Flexible + Key Vault…), no reescribir la aplicación.
 
 ---
 
