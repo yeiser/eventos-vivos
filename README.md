@@ -1,14 +1,11 @@
 # EventosVivos — Sistema núcleo de reservas de eventos
 
-Solución fullstack **.NET 10 + Angular** para la gestión de reservas de eventos (control de aforo en
-tiempo real, conflictos de agenda por venue y validación de reservas/pagos).
+Solución **fullstack .NET 10 + Angular 22** para el núcleo de un sistema de reservas de eventos:
+control de aforo en tiempo real (sin sobreventa), prevención de conflictos de agenda por venue y
+automatización de la validación de reservas y pagos.
 
-> Prueba técnica · Backend en Clean Architecture + API REST · Frontend Angular (tema Metronic) ·
-> PostgreSQL · Docker Compose · Terraform/Azure.
->
-> Documentos de referencia:
-> - [DISEÑO-ARQUITECTURA.md](DISEÑO-ARQUITECTURA.md) — definición, diseño y decisiones (ADRs).
-> - [PLAN-FASES.md](PLAN-FASES.md) — plan de ejecución por fases.
+> Prueba técnica · Backend en **Clean Architecture** + API REST · Frontend Angular (tema Metronic) ·
+> PostgreSQL · JWT + roles · Auditoría · Docker Compose · (Terraform/Azure para despliegue).
 
 ---
 
@@ -16,12 +13,89 @@ tiempo real, conflictos de agenda por venue y validación de reservas/pagos).
 
 | Capa | Tecnología |
 |------|------------|
-| Backend | .NET 10 (Clean Architecture), ASP.NET Core Web API |
-| Persistencia | EF Core 10 + PostgreSQL (Npgsql) |
-| Validación | FluentValidation |
-| Frontend | Angular (standalone + signals) + tema Metronic 8 (Bootstrap 5) |
-| Pruebas | xUnit, FluentAssertions, NSubstitute, Testcontainers |
-| Infra/Deploy | Docker Compose · Terraform · Azure |
+| Backend | **.NET 10** (Clean Architecture), ASP.NET Core Web API |
+| Persistencia | **EF Core 10 + PostgreSQL** (Npgsql), migraciones + seed |
+| Validación | FluentValidation (entrada) + invariantes de dominio |
+| Auth | JWT Bearer + roles (Admin/Usuario), PBKDF2, lockout anti-fuerza-bruta |
+| Frontend | **Angular 22** (standalone, zoneless, signals) + tema **Metronic 8** (Bootstrap 5) + ApexCharts |
+| Pruebas | xUnit, FluentAssertions, NSubstitute, **Testcontainers** (backend) · **Vitest** (frontend) |
+| Infra | Docker Compose · Terraform · Azure (despliegue) |
+
+---
+
+## Arquitectura y decisiones clave
+
+### Clean Architecture (4 capas)
+
+```
+┌───────────────────────────── Api ─────────────────────────────┐
+│  Controllers · Middleware · ProblemDetails · JWT · Swagger     │
+└───────────────▲───────────────────────────────┬───────────────┘
+                │ depende de                     │ depende de
+┌───────────────┴──────────────┐   ┌─────────────▼──────────────┐
+│         Application           │   │        Infrastructure       │
+│  Casos de uso (CQRS ligero)   │◄──┤  EF Core · Repositorios     │
+│  DTOs · Validators · Puertos  │   │  Interceptores · Seed · JWT │
+└───────────────▲──────────────┘   └────────────────────────────┘
+                │ depende de
+┌───────────────┴──────────────────────────────────────────────┐
+│                           Domain                               │
+│  Entidades · Value Objects · Reglas (RN/RF) · sin dependencias │
+└────────────────────────────────────────────────────────────────┘
+```
+
+La **regla de dependencia** apunta hacia adentro: el `Domain` no referencia a nadie; `Application`
+define puertos (interfaces) que `Infrastructure` implementa; `Api` compone todo por DI.
+
+### Decisiones de diseño (y por qué)
+
+- **Modelo de dominio rico**: las reglas de negocio (RN01–RN07) viven en las entidades (`Evento`,
+  `Reserva`) y se prueban sin infraestructura. Evita el *anemic domain model*.
+- **Anti-sobreventa real** (problema #1 del cliente): el flujo de reserva corre dentro de una
+  **transacción con bloqueo pesimista** (`SELECT … FOR UPDATE` sobre el evento), de modo que las
+  reservas concurrentes se serializan y el aforo nunca se excede. Reforzado con `xmin` (token de
+  concurrencia optimista de PostgreSQL). Hay una **prueba de concurrencia** que lanza N reservas en
+  paralelo sobre un aforo pequeño y verifica `Σ ocupadas ≤ capacidad`.
+- **Tiempo inyectable** (`IClock`): todas las reglas sensibles a la hora (RN03/RN04/RN06/RN07, ventana
+  de 24h) son deterministas y testeables.
+- **CQRS ligero** en `Application` (comandos/queries como handlers, sin MediatR) — explícito y testeable.
+- **Errores RFC 7807** (`application/problem+json`) uniformes, con código de regla (`RN0x`) y `traceId`.
+  Distinción intencional: **400** (entrada), **401/403** (auth), **409/422** (estado/regla de negocio).
+- **Auditoría como *cross-cutting concern***: dos interceptores de EF Core llenan la **trazabilidad**
+  (creado/modificado por quién y cuándo) y un **audit trail inmutable** (valores antes/después, con
+  *masking* de datos sensibles), sin contaminar la lógica de dominio.
+- **PostgreSQL**: `ILIKE` nativo para la búsqueda de título (RF-02) y `xmin` para concurrencia.
+- **Frontend Angular última versión + tema Metronic**: se integra el **CSS** de Metronic y se replica
+  el *layout shell* en componentes standalone (no se usa el JS de Metronic para evitar conflictos con
+  las librerías de Angular). El frontend usa signals + interceptores (JWT y errores) + guards por rol.
+
+### Seguridad
+
+- **JWT Bearer + roles** (Admin/Usuario) con política de *fallback* (todo requiere autenticación salvo
+  `login`). Admin: crear evento, confirmar pago, reporte, auditoría, gestión de reservas.
+- **Remediación de fuerza bruta en dos capas**: (1) *rate limiting* por IP en `login` y (2) **bloqueo
+  de cuenta** tras 5 intentos fallidos durante 15 min (→ HTTP 423). El lockout está modelado en el dominio.
+- **Hash de contraseñas** PBKDF2 con comparación en tiempo constante; **validación/whitelisting** de
+  entrada (DTOs explícitos); **CORS** restringido; **sin secretos** en el repositorio.
+
+---
+
+## Reglas de negocio y ambigüedades resueltas
+
+El enunciado contiene **contradicciones/imprecisiones intencionales**; detectarlas y resolverlas con
+criterio es parte del valor. Las decisiones tomadas:
+
+| Caso | Resolución |
+|------|-----------|
+| **RF-05 contradictorio** (cancelar "desde confirmada" y a la vez "rechazar si confirmada") | Se cancela desde *pendiente* y *confirmada*; se rechaza solo en estados **terminales**. Es la única lectura coherente con RN07. |
+| **Composición de límites por transacción** (RN04 <1h, RF-03 <24h→5, RN05 >$100→10) | Se aplican todas y **gana la más restrictiva** (`min`); <1h prohíbe reservar. |
+| **¿Las reservas pendientes consumen cupo?** | Sí: `Pendiente + Confirmada + Perdida` ocupan aforo (anti-sobreventa). El reporte (RF-06) cuenta solo **confirmadas**. |
+| **RN06 auto-completado** sin scheduler | Estado **efectivo** derivado al leer (`ahora > fin → Completado`), determinista con `IClock`. |
+| **Zona horaria (RN03 noche/fin de semana)** | Las fechas se reciben con el *offset* local del venue (Colombia) para validar la hora de pared; se **normalizan a UTC** al persistir (requisito de Npgsql). |
+
+RF/RN cubiertos: **RF-01..RF-06** (crear/listar/reservar/confirmar/cancelar/reporte) y **RN01..RN07**
+(capacidad ≤ venue, solapamiento de venues, horario nocturno, reserva tardía, límite por precio,
+auto-completado, cancelación con penalización), todos con pruebas de borde.
 
 ---
 
@@ -29,12 +103,17 @@ tiempo real, conflictos de agenda por venue y validación de reservas/pagos).
 
 ```
 .
-├── backend/                # Solución .NET (Domain / Application / Infrastructure / Api + tests)
-├── frontend/               # Aplicación Angular (pendiente — Fase 7+)
-├── infra/terraform/        # Infraestructura como código (pendiente — Fase 11)
-├── docker-compose.yml      # Orquestación local (db; api/frontend en Fase 10)
-├── DISEÑO-ARQUITECTURA.md
-└── PLAN-FASES.md
+├── backend/                       # Solución .NET (Clean Architecture)
+│   ├── src/
+│   │   ├── EventosVivos.Domain/         # Entidades, VOs, reglas (sin dependencias)
+│   │   ├── EventosVivos.Application/    # Casos de uso, DTOs, validators, puertos
+│   │   ├── EventosVivos.Infrastructure/ # EF Core, repos, interceptores, seed, JWT
+│   │   └── EventosVivos.Api/            # Controllers, middleware, auth, Swagger
+│   └── tests/                           # Domain / Application / Integration (Testcontainers)
+├── frontend/eventos-vivos-web/    # Angular 22 (standalone + signals) + tema Metronic
+├── scripts/seed-demo.ps1          # Generador de datos de demostración (vía API)
+├── docker-compose.yml             # PostgreSQL para desarrollo
+└── README.md
 ```
 
 ---
@@ -43,7 +122,7 @@ tiempo real, conflictos de agenda por venue y validación de reservas/pagos).
 
 - [.NET SDK 10](https://dotnet.microsoft.com/download) (fijado en `global.json`).
 - [Docker](https://www.docker.com/) + Docker Compose.
-- (Frontend, fases posteriores) Node.js LTS + Angular CLI.
+- Node.js ≥ 22.22 + npm (para el frontend).
 
 ---
 
@@ -56,27 +135,24 @@ docker compose up -d db
 docker compose ps        # verificar estado "healthy"
 ```
 
-Variables configurables (con valores por defecto para desarrollo): `POSTGRES_DB`, `POSTGRES_USER`,
+Variables configurables (con valores por defecto de desarrollo): `POSTGRES_DB`, `POSTGRES_USER`,
 `POSTGRES_PASSWORD`, `POSTGRES_PORT`.
 
 ### 2. Backend
 
 ```bash
 cd backend
-dotnet build              # compila toda la solución
-dotnet test               # ejecuta las pruebas
-dotnet run --project src/EventosVivos.Api   # API + Swagger UI en /swagger
+dotnet build
+dotnet test                                  # pruebas (incluye integración con Testcontainers)
+dotnet run --project src/EventosVivos.Api    # API + Swagger en /swagger
 ```
 
-La API aplica migraciones y siembra datos al arrancar (en `Development`). Swagger queda en
-`http://localhost:<puerto>/swagger`. Credenciales de demo sembradas: `admin` / `Admin123!` y
-`usuario` / `Usuario123!` (la autenticación se activa en la Fase 5).
+La API aplica migraciones y siembra datos al arrancar (en `Development`). Credenciales de demo:
+`admin` / `Admin123!` y `usuario` / `Usuario123!`.
 
-> **Conflicto de puertos (PostgreSQL local):** si ya tienes un PostgreSQL en el puerto 5432, levanta
-> el contenedor en otro puerto y apunta la API ahí:
+> **Conflicto de puertos (PostgreSQL local):** si ya tienes un PostgreSQL en el 5432, usa otro puerto:
 > ```bash
 > POSTGRES_PORT=5440 docker compose up -d db
-> # luego, para la API:
 > ConnectionStrings__Postgres="Host=127.0.0.1;Port=5440;Database=eventosvivos;Username=eventosvivos;Password=eventosvivos_dev" \
 >   dotnet run --project src/EventosVivos.Api
 > ```
@@ -91,38 +167,58 @@ npm run build             # build de producción
 npx ng test --watch=false # pruebas (Vitest)
 ```
 
-La URL de la API en desarrollo se configura en `src/environments/environment.development.ts`
+La URL de la API en desarrollo está en `src/environments/environment.development.ts`
 (por defecto `http://localhost:5080/api/v1`). El CORS de la API permite `http://localhost:4200`.
 
-> **Tema Metronic (licencia comercial — no versionado):** los *assets* no están en el repo (ver
-> [ADR-008](DISEÑO-ARQUITECTURA.md)). Cópialos desde tu licencia Metronic 8 a
-> `frontend/eventos-vivos-web/public/metronic/` con esta estructura mínima:
-> `css/style.bundle.css`, `plugins/global/plugins.bundle.{css,js}`, `plugins/global/fonts/`,
-> `js/scripts.bundle.js` y `media/` (logos, svg, avatars). `index.html` ya los enlaza.
+> **Tema Metronic (licencia comercial — no versionado):** los *assets* no están en el repositorio.
+> Cópialos desde tu licencia de **Metronic 8** a `frontend/eventos-vivos-web/public/metronic/` con
+> esta estructura mínima: `css/style.bundle.css`, `plugins/global/plugins.bundle.css`,
+> `plugins/global/fonts/` y `media/` (logos, svg, avatars). El `index.html` ya enlaza el CSS.
+
+### 4. (Opcional) Datos de demostración
+
+Con la API corriendo, puebla eventos y reservas realistas (respetando las reglas de negocio):
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/seed-demo.ps1 -ApiBase http://localhost:5080/api/v1
+```
 
 ---
 
-## Estado del proyecto (por fases)
+## Pruebas
 
-- [x] **Fase 0** — Scaffolding: solución, proyectos, referencias, Docker Compose (db), configuración base.
-- [x] **Fase 1** — Dominio + reglas de negocio (RN01–RN07) + 94 pruebas unitarias.
-- [x] **Fase 2** — Persistencia (EF Core 10 + PostgreSQL): DbContext, migración, seed, repositorios, `xmin`; pruebas con Testcontainers.
-- [x] **Fase 3** — Casos de uso (RF-01..RF-06): CQRS ligero, FluentValidation, transacción + bloqueo anti-sobreventa; prueba de concurrencia.
-- [x] **Fase 4** — API REST + ProblemDetails (RFC 7807) + Swagger + CORS + rate limiting + Serilog; pruebas de integración de endpoints.
-- [x] **Fase 5** — Autenticación JWT + roles (Admin/Usuario): login, política de fallback, 401/403 ProblemDetails, Swagger Bearer. Incluye **remediación de fuerza bruta** (rate limit por IP + bloqueo de cuenta tras 5 intentos fallidos → 423; ver DISEÑO §15.1).
-- [x] **Fase 6** — Auditoría y trazabilidad: interceptores EF (trazabilidad + audit trail inmutable con masking), endpoint `/auditoria` (Admin).
-- [x] **Fase 7** — Frontend Angular 22 (zoneless + signals) + tema Metronic 8: layout shell, login, interceptores JWT/errores, guards por rol.
-- [x] **Fase 8** — Frontend features: listado+filtros (RF-02), crear evento (RF-01), detalle, reservar (RF-03), confirmar/cancelar (RF-04/05), reporte con ApexCharts (RF-06).
-- [x] **Fase 9** — Frontend: vista de auditoría (Admin) con filtros/detalle, UI consciente del rol, UX de reglas, pulido de estados.
-- [ ] **Fase 10–11** — Docker Compose + Terraform/Azure + despliegue.
+- **Backend** (~169): unitarias de dominio (todas las RN/RF con casos de borde), unitarias de
+  aplicación (handlers + validators con NSubstitute), e integración con **Testcontainers** (PostgreSQL
+  efímero) incluyendo la **prueba de concurrencia anti-sobreventa** y los flujos de API end-to-end.
+- **Frontend** (~24): servicios, interceptores (JWT/errores), sesión y componentes clave (login,
+  formulario de evento, límite de reserva) con **Vitest**.
 
-> El detalle de cada fase y sus criterios de aceptación está en [PLAN-FASES.md](PLAN-FASES.md).
+```bash
+cd backend && dotnet test
+cd frontend/eventos-vivos-web && npx ng test --watch=false
+```
+
+---
+
+## Endpoints principales (`/api/v1`)
+
+| Método | Ruta | Rol |
+|--------|------|-----|
+| `POST` | `/auth/login` | público |
+| `GET` | `/venues` · `/eventos` · `/eventos/{id}` | autenticado |
+| `POST` | `/eventos` | Admin |
+| `GET` | `/eventos/{id}/reporte` · `/eventos/{id}/reservas` · `/reservas` · `/auditoria` | Admin |
+| `POST` | `/eventos/{id}/reservas` · `/reservas/{id}/cancelacion` | Usuario/Admin |
+| `POST` | `/reservas/{id}/confirmacion` | Admin |
+| `GET` | `/reservas/{id}` | Usuario/Admin |
+
+Errores en formato `application/problem+json` (RFC 7807) con código de regla y `traceId`.
 
 ---
 
 ## Notas
 
-- **Tema Metronic**: es un tema comercial (ThemeForest). Sus *assets* **no** se versionan en el repo;
-  se documentará en fases de frontend cómo colocarlos en `frontend/.../src/assets/metronic/` (ver
-  [ADR-008](DISEÑO-ARQUITECTURA.md)).
-- **Secretos**: nunca en el repositorio; se inyectan por variables de entorno / Azure Key Vault.
+- **Tema Metronic**: es comercial (ThemeForest); sus *assets* **no** se versionan. Solo se usa su CSS
+  (el JS de Metronic se omite para evitar conflictos con las librerías de Angular).
+- **Secretos**: nunca en el repositorio; se inyectan por variables de entorno / Azure Key Vault. La
+  clave JWT y la cadena de conexión de `appsettings.json` son **placeholders de desarrollo**.
