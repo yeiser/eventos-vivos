@@ -356,25 +356,24 @@ La demo prioriza simplicidad y costo; un ambiente **productivo real** cambiaría
 Arquitectura recomendada en Azure:
 
 ```
-                          Internet  (dominio propio + HTTPS)
-                              │
-                   ┌──────────▼───────────┐
-                   │ Azure Front Door + WAF│  TLS · CDN · WAF (OWASP) · enrutado
-                   └─────┬───────────┬─────┘
-                  /      │           │  /api
-          ┌──────────────▼──┐   ┌────▼─────────────────────────┐
-          │ Static Web Apps │   │ Azure Container Apps (API)    │  autoescala (KEDA)
-          │  (SPA Angular)  │   │  .NET 10 · sin estado         │  revisiones/blue-green
-          └─────────────────┘   └────┬───────────┬─────────┬────┘
-                                     │ Managed Identity     │
-                       ┌─────────────▼───┐ ┌───────▼──────┐ ┌▼───────────────────────┐
-                       │ Key Vault        │ │ ACR (priv.)  │ │ PostgreSQL Flexible     │
-                       │ (JWT, conn. str.)│ │ imágenes     │ │ Server (HA zonal, PITR) │
-                       └──────────────────┘ └──────────────┘ └─────────────────────────┘
-                       └──────── VNet + Private Endpoints (DB y Key Vault sin IP pública) ───────┘
+Internet  (dominio propio · HTTPS)
+   │
+   ▼
+Azure Front Door (Premium) + WAF        ·  TLS · CDN · WAF (OWASP)
+   │
+   ├──  /     ──►  Azure Static Web Apps   ·  SPA Angular (estáticos en el borde)
+   │
+   └──  /api  ──►  Azure Container Apps     ·  API .NET 10, sin estado
+                      ·  autoescala (KEDA) · revisiones blue-green
+                      ·  accede con Managed Identity (sin secretos en el entorno) a:
+                      │
+                      ├──►  Azure Key Vault              ·  clave JWT, cadena de conexión
+                      ├──►  Azure Container Registry     ·  imágenes privadas
+                      └──►  PostgreSQL Flexible Server   ·  HA zona-redundante + PITR
 
-   Observabilidad: Application Insights + Log Analytics (Azure Monitor)
-   CI/CD: GitHub Actions con OIDC → Azure · estado de Terraform en Azure Storage (con locking)
+  Red:            VNet + Private Endpoints  →  PostgreSQL y Key Vault sin IP pública
+  Observabilidad: Application Insights + Log Analytics (Azure Monitor)
+  CI/CD:          GitHub Actions con OIDC → Azure  ·  Terraform state en Azure Storage (locking)
 ```
 
 | Necesidad | Servicio Azure | Por qué |
